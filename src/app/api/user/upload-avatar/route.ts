@@ -1,77 +1,79 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { NextRequest, NextResponse } from "next/server"
+import { writeFile } from "fs/promises"
+import path from "path"
+import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import { writeFile } from 'fs/promises';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { prisma } from "@/lib/prisma"
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions)
 
-    if (!session || !session.user) {
+    if (!session) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { success: false, error: 'Unauthorized' },
         { status: 401 }
-      );
+      )
     }
 
-    const formData = await request.formData();
-    const file = formData.get('avatar') as File;
+    const formData = await req.formData()
+    const file = formData.get('avatar') as File
 
     if (!file) {
       return NextResponse.json(
-        { error: 'No file provided' },
+        { success: false, error: 'No file provided' },
         { status: 400 }
-      );
+      )
     }
 
     // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!validTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Invalid file type. Only images are allowed.' },
+        { success: false, error: 'Invalid file type. Only images allowed.' },
         { status: 400 }
-      );
+      )
     }
 
     // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
+    if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json(
-        { error: 'File too large. Maximum size is 5MB.' },
+        { success: false, error: 'File too large. Max 5MB allowed.' },
         { status: 400 }
-      );
+      )
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const bytes = await file.arrayBuffer()
+    const buffer = Buffer.from(bytes)
 
     // Generate unique filename
-    const extension = file.name.split('.').pop();
-    const filename = `${uuidv4()}.${extension}`;
-    
-    // Save to public/uploads/avatars directory
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'avatars');
-    const filePath = path.join(uploadDir, filename);
-    
-    await writeFile(filePath, buffer);
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`
+    const filename = `avatar-${uniqueSuffix}${path.extname(file.name)}`
+    const filepath = path.join(process.cwd(), 'public', 'uploads', 'avatars', filename)
 
-    // Return the URL
-    const url = `/uploads/avatars/${filename}`;
+    // Save file
+    await writeFile(filepath, buffer)
 
-    return NextResponse.json({ url });
+    const avatarUrl = `/uploads/avatars/${filename}`
+
+    // Update user avatar in database
+    await prisma.$executeRaw`
+      UPDATE "User" 
+      SET avatar = ${avatarUrl} 
+      WHERE id = ${session.user.id}
+    `
+
+    return NextResponse.json({
+      success: true,
+      avatarUrl,
+      message: 'Avatar uploaded successfully',
+    })
   } catch (error) {
-    console.error('Error uploading avatar:', error);
+    console.error('Upload avatar error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { success: false, error: 'Failed to upload avatar' },
       { status: 500 }
-    );
+    )
   }
 }
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
