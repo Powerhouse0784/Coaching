@@ -3,10 +3,6 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { prisma } from "@/lib/prisma"
 
-interface RouteParams {
-  params: { id: string }
-}
-
 interface DoubtResult {
   id: string
   title: string
@@ -36,8 +32,11 @@ interface DoubtUpdateResult {
   isSolved: boolean
 }
 
-// GET /api/doubts/[id] - Get single doubt with replies
-export async function GET(req: NextRequest, { params }: RouteParams) {
+// ✅ FIXED: params is now Promise<{ id: string }>
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -48,16 +47,17 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const { id } = params
+    // ✅ FIXED: await params
+    const { id } = await params
 
     // Get doubt with student info
     const doubtResults = await prisma.$queryRaw<DoubtResult[]>`
       SELECT 
         d.id, d.title, d.content, d."studentId", d."isSolved", 
         COALESCE(d.upvotes, 0) as upvotes, d."createdAt",
-        s.name as studentName, s.avatar as studentAvatar
+        u.name as studentName, u.avatar as studentAvatar
       FROM "doubt" d
-      JOIN "Student" s ON d."studentId" = s.id
+      JOIN "User" u ON d."studentId" = u.id
       WHERE d.id = ${id}
     `
 
@@ -108,7 +108,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 }
 
 // PATCH /api/doubts/[id] - Update doubt (upvote, solve)
-export async function PATCH(req: NextRequest, { params }: RouteParams) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -119,7 +122,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const { id } = params
+    // ✅ FIXED: await params
+    const { id } = await params
     const body = await req.json()
     const { action } = body // 'upvote', 'solve'
 

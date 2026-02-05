@@ -3,10 +3,6 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { prisma } from "@/lib/prisma"
 
-interface RouteParams {
-  params: { id: string }
-}
-
 interface AssignmentResult {
   id: string
   title: string
@@ -26,7 +22,11 @@ interface SubmissionResult {
   studentAvatar: string | null
 }
 
-export async function GET(req: NextRequest, { params }: RouteParams) {
+// ✅ FIXED: params is now Promise<{ id: string }>
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -37,7 +37,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const { id } = params
+    // ✅ FIXED: await params
+    const { id } = await params
 
     if (!id) {
       return NextResponse.json(

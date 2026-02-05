@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-// ✅ COMPLETE ERROR-FREE CODE - JUST PASTE IT!
-
-interface RouteParams {
-  params: { certNo: string }
-}
-
-export async function GET(req: NextRequest, { params }: RouteParams) {
+// ✅ FIXED: params is now Promise<{ certNo: string }>
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ certNo: string }> }
+) {
   try {
-    const { certNo } = params
+    // ✅ FIXED: await params
+    const { certNo } = await params
 
-    // ✅ FIXED: Use raw SQL - No Prisma model dependencies
+    // ✅ Use raw SQL - No Prisma model dependencies
     const certificateResult: any[] = await prisma.$queryRaw`
       SELECT 
         c.*,

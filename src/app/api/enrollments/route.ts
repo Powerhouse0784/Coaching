@@ -48,14 +48,15 @@ export async function GET(req: NextRequest) {
       SELECT 
         e.id, e."studentId", e."courseId", e."enrolledAt",
         c.title as courseTitle, c.thumbnail as courseThumbnail,
-        t.name as teacherName, t.avatar as teacherAvatar,
+        u.name as teacherName, u.avatar as teacherAvatar,
         COUNT(m.id) as totalModules
       FROM "Enrollment" e
       JOIN "Course" c ON e."courseId" = c.id
       JOIN "Teacher" t ON c."teacherId" = t.id
+      JOIN "User" u ON t."userId" = u.id
       LEFT JOIN "Module" m ON c.id = m."courseId"
       WHERE e."studentId" = ${studentId}
-      GROUP BY e.id, c.title, c.thumbnail, t.name, t.avatar
+      GROUP BY e.id, c.title, c.thumbnail, u.name, u.avatar
       ORDER BY e."enrolledAt" DESC
     ` as EnrollmentListResult[]
 
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest) {
       enrollments.map(async (enrollment) => {
         // Get total lectures count
         const totalLecturesResult = await prisma.$queryRaw`
-          SELECT COUNT(l.id) as total
+          SELECT COUNT(l.id)::int as total
           FROM "Lecture" l
           JOIN "Module" m ON l."moduleId" = m.id
           WHERE m."courseId" = ${enrollment.courseId}
@@ -74,7 +75,7 @@ export async function GET(req: NextRequest) {
 
         // Get completed lectures count
         const completedLecturesResult = await prisma.$queryRaw`
-          SELECT COUNT(p.id) as completed
+          SELECT COUNT(p.id)::int as completed
           FROM "Progress" p
           JOIN "Lecture" l ON p."lectureId" = l.id
           JOIN "Module" m ON l."moduleId" = m.id

@@ -44,13 +44,11 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
 
-    // Simple parameterized queries without prisma.raw()
-    const params: string[] = []
+    // Build query dynamically
     let whereConditions = 'WHERE 1=1'
-
+    
     if (courseId) {
-      whereConditions += ` AND d."courseId" = $${params.length + 1}`
-      params.push(courseId)
+      whereConditions += ` AND d."courseId" = '${courseId}'`
     }
     if (status === 'open') {
       whereConditions += ' AND d."isSolved" = false'
@@ -74,12 +72,12 @@ export async function GET(req: NextRequest) {
       ${whereConditions}
       GROUP BY d.id, u.name, u.avatar
       ORDER BY d."isSolved" ASC, upvotes DESC, d."createdAt" DESC
-      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      LIMIT ${limit} OFFSET ${offset}
     ` as DoubtListResult[]
 
     // Get total count
     const totalResults = await prisma.$queryRaw<TotalResult[]>`
-      SELECT COUNT(DISTINCT d.id) as total
+      SELECT COUNT(DISTINCT d.id)::int as total
       FROM "doubt" d
       ${whereConditions}
     ` as TotalResult[]

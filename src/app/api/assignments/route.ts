@@ -35,9 +35,7 @@ export async function GET(req: NextRequest) {
       const studentId = studentResults[0].id
 
       // Get student's assignments
-      let whereClause = `JOIN "Course" c ON a."courseId" = c.id 
-                         JOIN "Enrollment" e ON c.id = e."courseId" 
-                         WHERE e."studentId" = ${studentId}`
+      let whereClause = `AND e."studentId" = ${studentId}`
 
       if (courseId) {
         whereClause += ` AND a."courseId" = ${courseId}`
@@ -46,13 +44,16 @@ export async function GET(req: NextRequest) {
       const assignments = await prisma.$queryRaw`
         SELECT 
           a.id, a.title, a.description, a."dueDate", a."maxMarks", a."fileUrl",
-          t.name as "teacherName", t.avatar as "teacherAvatar",
+          tu.name as "teacherName", tu.avatar as "teacherAvatar",
           s.id as "submissionId", s."submittedAt", s."isEvaluated", s.marks
         FROM "Assignment" a
         JOIN "Teacher" t ON a."teacherId" = t.id
         JOIN "User" tu ON t."userId" = tu.id
+        JOIN "Course" c ON a."courseId" = c.id 
+        JOIN "Enrollment" e ON c.id = e."courseId"
         LEFT JOIN "AssignmentSubmission" s ON a.id = s."assignmentId" AND s."studentId" = ${studentId}
-        ${whereClause}
+        WHERE e."studentId" = ${studentId}
+        ${courseId ? `AND a."courseId" = ${courseId}` : ``}
         ORDER BY a."dueDate" ASC
       ` as any[]
 

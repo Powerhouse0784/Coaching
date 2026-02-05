@@ -3,7 +3,6 @@ const nextConfig = {
   // ✅ Image domains
   images: {
     remotePatterns: [
-      // Original domains converted
       {
         protocol: 'https',
         hostname: 'uploadthing.com',
@@ -28,7 +27,6 @@ const nextConfig = {
         protocol: 'http',
         hostname: 'localhost',
       },
-      // Existing remotePatterns preserved
       {
         protocol: 'https',
         hostname: '**.r2.dev',
@@ -40,14 +38,6 @@ const nextConfig = {
     ],
   },
 
-  // ✅ API configuration for file uploads
-  api: {
-    bodyParser: {
-      sizeLimit: '100mb', // Increased for video uploads
-    },
-    responseLimit: false,
-  },
-
   // ✅ Turbopack config
   turbopack: {
     root: __dirname,
@@ -56,8 +46,8 @@ const nextConfig = {
   // ✅ reactStrictMode enabled
   reactStrictMode: true,
 
-  // ✅ Server external packages
-  serverExternalPackages: ['@prisma/client', 'bcryptjs'],
+  // ✅ Server external packages (moved from experimental)
+  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'fs', 'path'],
 
   // ✅ Webpack config for video.js and file handling
   webpack: (config, { isServer }) => {
@@ -133,16 +123,6 @@ const nextConfig = {
     ];
   },
 
-  // ✅ Experimental features
-  experimental: {
-    // For Next.js 13/14 compatibility
-    serverComponentsExternalPackages: ['fs', 'path', 'bcryptjs'],
-    
-    // Enable if you need these features
-    // optimizeCss: true,
-    // scrollRestoration: true,
-  },
-
   // ✅ Compiler options
   compiler: {
     // Remove console logs in production
@@ -150,9 +130,6 @@ const nextConfig = {
       exclude: ['error', 'warn'],
     } : false,
   },
-
-  // ✅ Enable SWC minify for better performance
-  swcMinify: true,
 };
 
 module.exports = nextConfig;

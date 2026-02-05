@@ -3,22 +3,20 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { prisma } from "@/lib/prisma"
 
-interface RouteParams {
-  params: {
-    id: string
-  }
-}
-
-// GET /api/courses/:id - Get single course
-export async function GET(req: NextRequest, { params }: RouteParams) {
+// ✅ FIXED: params is now Promise<{ id: string }>
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = params
+    // ✅ FIXED: await params
+    const { id } = await params
 
     // Get course with all details
     const courseResults = await prisma.$queryRaw`
       SELECT 
         c.id, c.title, c.description, c.price, c."isPublished",
-        t.name as "teacherName", t.avatar as "teacherAvatar",
+        tu.name as "teacherName", tu.avatar as "teacherAvatar",
         cat.name as "categoryName",
         COUNT(e.id) as "enrollmentCount"
       FROM "Course" c
@@ -28,7 +26,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       LEFT JOIN "Enrollment" e ON c.id = e."courseId"
       WHERE c.id = ${id}
       GROUP BY c.id, c.title, c.description, c.price, c."isPublished", 
-               t.name, t.avatar, cat.name
+               tu.name, tu.avatar, cat.name
     ` as any[]
 
     const course = courseResults[0]
@@ -96,7 +94,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 }
 
 // PATCH /api/courses/:id - Update course (Teacher only)
-export async function PATCH(req: NextRequest, { params }: RouteParams) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -107,7 +108,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const { id } = params
+    // ✅ FIXED: await params
+    const { id } = await params
     const body = await req.json()
 
     // Get teacher
@@ -168,7 +170,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 }
 
 // DELETE /api/courses/:id - Delete course (Teacher only)
-export async function DELETE(req: NextRequest, { params }: RouteParams) {
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -179,7 +184,8 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const { id } = params
+    // ✅ FIXED: await params
+    const { id } = await params
 
     // Get teacher
     const teacherResults = await prisma.$queryRaw`

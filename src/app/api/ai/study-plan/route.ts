@@ -166,7 +166,6 @@ Generate the complete study plan now:`;
   }
 }
 
-
 export async function GET() {
   try {
     // Test Groq connection
