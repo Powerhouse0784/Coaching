@@ -23,7 +23,7 @@ export async function middleware(req: NextRequest) {
     // ✅ FIXED: Allow both STUDENT and TEACHER roles to access /student
     if (token.role !== "STUDENT" && token.role !== "TEACHER") {
       console.log("❌ Blocked STUDENT route - Role:", token?.role)
-      return NextResponse.redirect(new URL("/unauthorized", req.url))
+      return NextResponse.redirect(new URL("/", req.url))
     }
   }
 
@@ -36,7 +36,7 @@ export async function middleware(req: NextRequest) {
     // ✅ Only TEACHER role can access /teacher
     if (token.role !== "TEACHER") {
       console.log("❌ Blocked TEACHER route - Role:", token?.role)
-      return NextResponse.redirect(new URL("/unauthorized", req.url))
+      return NextResponse.redirect(new URL("/", req.url))
     }
   }
 
@@ -48,7 +48,7 @@ export async function middleware(req: NextRequest) {
     }
     if (token.role !== "ADMIN") {
       console.log("❌ Blocked ADMIN route - Role:", token?.role)
-      return NextResponse.redirect(new URL("/unauthorized", req.url))
+      return NextResponse.redirect(new URL("/", req.url))
     }
   }
 
