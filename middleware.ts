@@ -6,13 +6,19 @@ export async function middleware(req: NextRequest) {
   const token = await getToken({ req })
   const path = req.nextUrl.pathname
 
-  // ✅ Add debugging
+  // ✅ Add logging
   console.log("🔐 Middleware check:", {
     path,
     tokenExists: !!token,
     role: token?.role,
     email: token?.email,
   })
+
+  // ✅ If no token at all, redirect to login (but not on login/register pages)
+  if (!token && !path.startsWith('/login') && !path.startsWith('/register')) {
+    console.log("❌ No token, redirecting to login")
+    return NextResponse.redirect(new URL('/login', req.url))
+  }
 
   // Protect student routes
   if (path.startsWith("/student") && token?.role !== "STUDENT") {
