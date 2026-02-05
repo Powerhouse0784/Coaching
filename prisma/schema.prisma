@@ -1,0 +1,293 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  name       String?
+  password   String?
+  role       String   @default("STUDENT")
+  avatar     String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  phone         String?
+  bio           String?
+  location      String?
+  dateOfBirth   DateTime?
+  qualification String?
+  experience    String?
+  subjects      String?
+  specialization String?
+  teachingStyle String?
+  website       String?
+  linkedin      String?
+  twitter       String?
+  instagram     String?
+
+  student       Student?        @relation("UserStudent")
+  teacher       Teacher?        @relation("UserTeacher")
+  videoProgress VideoProgress[]
+
+  @@map("users")
+}
+
+model Student {
+  id          String       @id @default(uuid())
+  userId      String       @unique
+  user        User         @relation("UserStudent", fields: [userId], references: [id])
+  submissions Submission[]
+  enrollments Enrollment[]
+
+  @@map("students")
+}
+
+model Teacher {
+  id           String        @id @default(uuid())
+  userId       String        @unique
+  user         User          @relation("UserTeacher", fields: [userId], references: [id])
+  experience   String?
+  rating       Float?        @default(0)
+  courses      Course[]
+  assignments  Assignment[]
+  videoFolders VideoFolder[]
+
+  @@map("teachers")
+}
+
+model Category {
+  id      String   @id @default(uuid())
+  name    String
+  slug    String   @unique
+  courses Course[]
+
+  @@map("categories")
+}
+
+model Course {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String   @unique
+  description String
+  price       Float
+  level       String   @default("Beginner")
+  language    String   @default("English")
+  thumbnail   String?
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id])
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  modules     Module[]
+  enrollments Enrollment[]
+  assignments Assignment[]
+
+  @@map("courses")
+}
+
+model Module {
+  id       String    @id @default(uuid())
+  title    String
+  order    Int
+  courseId String
+  course   Course    @relation(fields: [courseId], references: [id])
+  lectures Lecture[]
+
+  @@map("modules")
+}
+
+model Lecture {
+  id       String  @id @default(uuid())
+  title    String
+  duration Int
+  order    Int
+  isFree   Boolean @default(false)
+  videoUrl String?
+  moduleId String
+  module   Module  @relation(fields: [moduleId], references: [id])
+
+  @@map("lectures")
+}
+
+model Enrollment {
+  id         String   @id @default(uuid())
+  studentId  String
+  courseId   String
+  enrolledAt DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id])
+  course  Course  @relation(fields: [courseId], references: [id])
+
+  @@unique([studentId, courseId])
+  @@map("enrollments")
+}
+
+model Assignment {
+  id          String       @id @default(uuid())
+  title       String
+  description String
+  totalMarks  Int
+  dueDate     DateTime
+  fileUrl     String?
+  createdAt   DateTime     @default(now())
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id])
+
+  courseId String?
+  course   Course? @relation(fields: [courseId], references: [id])
+
+  submissions Submission[]
+
+  @@map("assignments")
+}
+
+model Submission {
+  id          String   @id @default(uuid())
+  content     String?
+  fileUrl     String?
+  marks       Int?
+  feedback    String?
+  isEvaluated Boolean  @default(false)
+  submittedAt DateTime @default(now())
+
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id])
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+
+  @@unique([assignmentId, studentId])
+  @@map("submissions")
+}
+
+model VideoFolder {
+  id          String   @id @default(uuid())
+  name        String
+  subject     String
+  class       String
+  chapter     String
+  description String?
+  thumbnail   String?
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  videos Video[]
+
+  @@map("video_folders")
+}
+
+model Video {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  videoUrl    String
+  duration    String   @default("0:00")
+  thumbnail   String?
+  size        String?
+  quality     String   @default("1080p")
+  views       Int      @default(0)
+  uploadDate  DateTime @default(now())
+
+  folderId String
+  folder   VideoFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  progress VideoProgress[]
+
+  @@map("videos")
+}
+
+model VideoProgress {
+  id                String   @id @default(uuid())
+  watchedPercentage Int      @default(0)
+  watchedSeconds    Int      @default(0)
+  lastPosition      Int      @default(0)
+  completed         Boolean  @default(false)
+  viewCounted       Boolean  @default(false)
+  bookmarked        Boolean  @default(false)
+  watchDuration     Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  videoId String
+  video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@map("video_progress")
+}
+
+// ========== NEW CONTACT & CHAT MODELS ==========
+model ContactSubmission {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  category  String
+  message   String
+  status    String   @default("pending")
+  priority  String   @default("normal")
+  
+  ipAddress String?
+  userAgent String?
+  repliedAt DateTime?
+  repliedBy String?
+  notes     String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("contact_submissions")
+  @@index([email])
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model ChatConversation {
+  id        String   @id @default(uuid())
+  sessionId String?  
+  userId    String?
+  
+  messages  ChatMessage[]
+  
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+
+  @@map("chat_conversations")
+  @@index([sessionId])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id             String   @id @default(uuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  role           String
+  content        String
+  model          String?
+  
+  createdAt      DateTime @default(now())
+
+  @@map("chat_messages")
+  @@index([conversationId])
+}
