@@ -1,12 +1,9 @@
 // app/api/teacher/video-folders/[id]/route.ts
-// ✅ COMPLETE UPDATED VERSION - Handles FormData for thumbnail uploads
+// ✅ COMPLETE - Works on Vercel with UploadThing
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { writeFile } from 'fs/promises';
-import path from 'path';
-import fs from 'fs';
 
 // DELETE - Delete a folder
 export async function DELETE(
@@ -57,7 +54,7 @@ export async function DELETE(
   }
 }
 
-// ✅ UPDATED: PATCH - Update folder with thumbnail (FormData)
+// PATCH - Update folder with thumbnail URL from UploadThing
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -95,15 +92,9 @@ export async function PATCH(
       return NextResponse.json({ error: 'You can only update your own folders' }, { status: 403 });
     }
 
-    const formData = await request.formData();
-    
-    const name = formData.get('name') as string;
-    const subject = formData.get('subject') as string;
-    const classValue = formData.get('class') as string;
-    const chapter = formData.get('chapter') as string;
-    const description = formData.get('description') as string;
-    const isPublic = formData.get('isPublic') === 'true';
-    const thumbnailFile = formData.get('thumbnailFile') as File | null;
+    // ✅ Expecting JSON with thumbnail URL from UploadThing
+    const body = await request.json();
+    const { name, subject, class: classValue, chapter, description, isPublic, thumbnailUrl } = body;
 
     const updateData: any = {};
     
@@ -111,26 +102,9 @@ export async function PATCH(
     if (subject) updateData.subject = subject;
     if (classValue) updateData.class = classValue;
     if (chapter) updateData.chapter = chapter;
-    if (description !== null) updateData.description = description;
-    updateData.isPublic = isPublic;
-
-    // ✅ Handle thumbnail upload
-    if (thumbnailFile) {
-      const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'folder-thumbnails');
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-
-      const timestamp = Date.now();
-      const sanitizedName = thumbnailFile.name.replace(/[^a-zA-Z0-9.\-]/g, '_').toLowerCase();
-      const fileName = `${timestamp}_${sanitizedName}`;
-      const filePath = path.join(uploadsDir, fileName);
-      
-      const buffer = Buffer.from(await thumbnailFile.arrayBuffer());
-      await writeFile(filePath, buffer);
-      
-      updateData.thumbnail = `/uploads/folder-thumbnails/${fileName}`;
-    }
+    if (description !== undefined) updateData.description = description;
+    if (isPublic !== undefined) updateData.isPublic = isPublic;
+    if (thumbnailUrl) updateData.thumbnail = thumbnailUrl; // ✅ URL from UploadThing
 
     const updatedFolder = await prisma.videoFolder.update({
       where: { id },

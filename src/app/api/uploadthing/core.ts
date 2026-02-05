@@ -1,0 +1,68 @@
+// app/api/uploadthing/core.ts
+import { createUploadthing, type FileRouter } from "uploadthing/next";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+ 
+const f = createUploadthing();
+ 
+export const ourFileRouter = {
+  // ✅ NEW: Video uploader (512MB max for large lecture videos)
+  videoUploader: f({ 
+    video: { maxFileSize: "512MB", maxFileCount: 1 } 
+  })
+    .middleware(async ({ req }) => {
+      const session = await getServerSession(authOptions);
+      if (!session || session.user.role !== 'TEACHER') {
+        throw new Error("Unauthorized - Teachers only");
+      }
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      console.log("✅ Video uploaded:", file.url);
+      return { url: file.url };
+    }),
+
+  // Thumbnail uploader for folders
+  folderThumbnail: f({ image: { maxFileSize: "4MB", maxFileCount: 1 } })
+    .middleware(async ({ req }) => {
+      const session = await getServerSession(authOptions);
+      if (!session || session.user.role !== 'TEACHER') {
+        throw new Error("Unauthorized");
+      }
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      console.log("Folder thumbnail uploaded:", file.url);
+      return { url: file.url };
+    }),
+
+  // Thumbnail uploader for videos
+  videoThumbnail: f({ image: { maxFileSize: "4MB", maxFileCount: 1 } })
+    .middleware(async ({ req }) => {
+      const session = await getServerSession(authOptions);
+      if (!session || session.user.role !== 'TEACHER') {
+        throw new Error("Unauthorized");
+      }
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      console.log("Video thumbnail uploaded:", file.url);
+      return { url: file.url };
+    }),
+
+  // Profile avatar uploader
+  profileAvatar: f({ image: { maxFileSize: "2MB", maxFileCount: 1 } })
+    .middleware(async ({ req }) => {
+      const session = await getServerSession(authOptions);
+      if (!session) {
+        throw new Error("Unauthorized");
+      }
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      console.log("Avatar uploaded:", file.url);
+      return { url: file.url };
+    }),
+} satisfies FileRouter;
+ 
+export type OurFileRouter = typeof ourFileRouter;

@@ -1,12 +1,9 @@
 // app/api/teacher/videos/[id]/route.ts
-// ✅ COMPLETE UPDATED VERSION - Handles FormData for thumbnail uploads
+// ✅ COMPLETE - Works on Vercel with UploadThing
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { writeFile } from 'fs/promises';
-import path from 'path';
-import fs from 'fs';
 
 // PATCH - Update a video
 export async function PATCH(
@@ -47,33 +44,15 @@ export async function PATCH(
       return NextResponse.json({ error: 'You can only update videos in your own folders' }, { status: 403 });
     }
 
-    const formData = await request.formData();
-    const title = formData.get('title') as string;
-    const description = formData.get('description') as string;
-    const thumbnailFile = formData.get('thumbnailFile') as File | null;
+    // ✅ Expecting JSON with thumbnail URL from UploadThing
+    const body = await request.json();
+    const { title, description, thumbnailUrl } = body;
 
     const updateData: any = {};
     
     if (title !== null && title.trim() !== '') updateData.title = title;
-    if (description !== null) updateData.description = description;
-    
-    // ✅ Handle thumbnail upload
-    if (thumbnailFile) {
-      const thumbnailsDir = path.join(process.cwd(), 'public', 'uploads', 'video-thumbnails');
-      if (!fs.existsSync(thumbnailsDir)) {
-        fs.mkdirSync(thumbnailsDir, { recursive: true });
-      }
-
-      const timestamp = Date.now();
-      const sanitizedName = thumbnailFile.name.replace(/[^a-zA-Z0-9.\-]/g, '_').toLowerCase();
-      const fileName = `${timestamp}_${sanitizedName}`;
-      const filePath = path.join(thumbnailsDir, fileName);
-      
-      const buffer = Buffer.from(await thumbnailFile.arrayBuffer());
-      await writeFile(filePath, buffer);
-      
-      updateData.thumbnail = `/uploads/video-thumbnails/${fileName}`;
-    }
+    if (description !== undefined) updateData.description = description;
+    if (thumbnailUrl) updateData.thumbnail = thumbnailUrl; // ✅ URL from UploadThing
 
     const updatedVideo = await prisma.video.update({
       where: { id },

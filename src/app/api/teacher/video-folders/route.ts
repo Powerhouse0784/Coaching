@@ -1,12 +1,9 @@
 // app/api/teacher/video-folders/route.ts
-// ✅ COMPLETE UPDATED VERSION - Handles FormData for thumbnail uploads
+// ✅ COMPLETE - Works on Vercel with UploadThing + Puter.js
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { writeFile } from 'fs/promises';
-import path from 'path';
-import fs from 'fs';
 
 // GET - Fetch all folders for the logged-in teacher
 export async function GET(request: NextRequest) {
@@ -52,17 +49,15 @@ export async function GET(request: NextRequest) {
     });
 
     const transformedFolders = folders.map(folder => {
-      // ✅ Calculate unique viewers (only those who have viewCounted = true)
+      // Calculate unique viewers (only those who have viewCounted = true)
       const uniqueViewers = new Set<string>();
       let totalWatchSeconds = 0;
 
       folder.videos.forEach(video => {
         video.progress.forEach(prog => {
-          // Only count users who have watched for 50+ seconds
           if (prog.viewCounted) {
             uniqueViewers.add(prog.userId);
           }
-          // Sum actual watched seconds
           totalWatchSeconds += prog.watchedSeconds;
         });
       });
@@ -107,7 +102,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ✅ UPDATED: POST - Create folder with thumbnail (FormData)
+// POST - Create folder with thumbnail URL from UploadThing
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -128,37 +123,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 });
     }
 
-    const formData = await request.formData();
-    
-    const name = formData.get('name') as string;
-    const subject = formData.get('subject') as string;
-    const classValue = formData.get('class') as string;
-    const chapter = formData.get('chapter') as string;
-    const description = formData.get('description') as string;
-    const isPublic = formData.get('isPublic') === 'true';
-    const thumbnailFile = formData.get('thumbnailFile') as File | null;
+    // ✅ Expecting JSON with thumbnail URL from UploadThing
+    const body = await request.json();
+    const { name, subject, class: classValue, chapter, description, isPublic, thumbnailUrl } = body;
 
     if (!name || !subject || !classValue || !chapter) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    // ✅ Handle thumbnail upload
-    let thumbnailUrl = '';
-    if (thumbnailFile) {
-      const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'folder-thumbnails');
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-
-      const timestamp = Date.now();
-      const sanitizedName = thumbnailFile.name.replace(/[^a-zA-Z0-9.\-]/g, '_').toLowerCase();
-      const fileName = `${timestamp}_${sanitizedName}`;
-      const filePath = path.join(uploadsDir, fileName);
-      
-      const buffer = Buffer.from(await thumbnailFile.arrayBuffer());
-      await writeFile(filePath, buffer);
-      
-      thumbnailUrl = `/uploads/folder-thumbnails/${fileName}`;
     }
 
     const folder = await prisma.videoFolder.create({
@@ -168,8 +138,8 @@ export async function POST(request: NextRequest) {
         class: classValue,
         chapter,
         description: description || '',
-        thumbnail: thumbnailUrl,
-        isPublic,
+        thumbnail: thumbnailUrl || '', // ✅ URL from UploadThing
+        isPublic: isPublic || false,
         teacherId: teacher.id
       }
     });
@@ -198,6 +168,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Helper functions
 function calculateTotalDuration(videos: any[]): string {
   let totalSeconds = 0;
   

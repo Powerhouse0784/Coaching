@@ -1,14 +1,11 @@
 // app/api/teacher/videos/route.ts
-// ✅ COMPLETE UPDATED VERSION - Receives duration from client, handles thumbnail uploads
+// ✅ COMPLETE - Works on Vercel with Puter.js + UploadThing
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import fs from 'fs';
-import path from 'path';
-import { writeFile } from 'fs/promises';
 
-// POST - Upload a new video
+// POST - Upload a new video (receives Puter.js URL from client)
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -29,27 +26,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 });
     }
 
-    const formData = await request.formData();
-    
-    const folderId = formData.get('folderId') as string;
-    const title = formData.get('title') as string;
-    const description = formData.get('description') as string;
-    const duration = formData.get('duration') as string; // ✅ NEW: Client sends extracted duration
-    const videoFile = formData.get('videoFile') as File;
-    const thumbnailFile = formData.get('thumbnailFile') as File | null;
+    // ✅ Expecting JSON with Puter.js video URL and UploadThing thumbnail URL
+    const body = await request.json();
+    const { 
+      folderId, 
+      title, 
+      description, 
+      duration, 
+      videoUrl,      // ✅ Puter.js video URL
+      thumbnailUrl,  // ✅ UploadThing thumbnail URL
+      size,
+      quality
+    } = body;
 
     // Validate required fields
-    if (!folderId || !title || !videoFile) {
+    if (!folderId || !title || !videoUrl) {
       return NextResponse.json({ 
-        error: 'Missing required fields: folderId, title, and videoFile are required' 
-      }, { status: 400 });
-    }
-
-    // Check file size (limit to 2GB)
-    const maxSize = 2 * 1024 * 1024 * 1024; // 2GB in bytes
-    if (videoFile.size > maxSize) {
-      return NextResponse.json({ 
-        error: 'File too large. Maximum size is 2GB' 
+        error: 'Missing required fields: folderId, title, and videoUrl are required' 
       }, { status: 400 });
     }
 
@@ -68,61 +61,17 @@ export async function POST(request: NextRequest) {
       }, { status: 403 });
     }
 
-    // Create uploads directory if it doesn't exist
-    const videosDir = path.join(process.cwd(), 'public', 'uploads', 'videos');
-    const thumbnailsDir = path.join(process.cwd(), 'public', 'uploads', 'video-thumbnails');
-    
-    if (!fs.existsSync(videosDir)) {
-      fs.mkdirSync(videosDir, { recursive: true });
-    }
-    if (!fs.existsSync(thumbnailsDir)) {
-      fs.mkdirSync(thumbnailsDir, { recursive: true });
-    }
-
-    // Sanitize filename
-    const sanitizeFilename = (filename: string) => {
-      return filename
-        .replace(/[^a-zA-Z0-9.\-]/g, '_')
-        .replace(/\s+/g, '_')
-        .replace(/_+/g, '_')
-        .toLowerCase();
-    };
-
-    const timestamp = Date.now();
-    const sanitizedVideoName = sanitizeFilename(videoFile.name);
-    const videoFileName = `${timestamp}_${sanitizedVideoName}`;
-    const videoFilePath = path.join(videosDir, videoFileName);
-    const videoUrl = `/uploads/videos/${videoFileName}`;
-
-    // Save video file
-    const videoBuffer = Buffer.from(await videoFile.arrayBuffer());
-    await writeFile(videoFilePath, videoBuffer);
-
-    // ✅ Handle thumbnail upload
-    let thumbnailUrl = '';
-    if (thumbnailFile) {
-      const sanitizedThumbName = sanitizeFilename(thumbnailFile.name);
-      const thumbFileName = `${timestamp}_${sanitizedThumbName}`;
-      const thumbFilePath = path.join(thumbnailsDir, thumbFileName);
-      const thumbBuffer = Buffer.from(await thumbnailFile.arrayBuffer());
-      await writeFile(thumbFilePath, thumbBuffer);
-      thumbnailUrl = `/uploads/video-thumbnails/${thumbFileName}`;
-    }
-
-    // ✅ Use duration sent from client (already extracted)
-    const finalDuration = duration || '0:00';
-
     // Create video record in database
     const video = await prisma.video.create({
       data: {
         title: title.trim(),
         description: (description || '').trim(),
-        duration: finalDuration, // ✅ Use client-extracted duration
+        duration: duration || '0:00',
         views: 0,
-        videoUrl: videoUrl,
-        thumbnail: thumbnailUrl,
-        size: `${(videoFile.size / (1024 * 1024)).toFixed(2)} MB`,
-        quality: '1080p',
+        videoUrl: videoUrl,        // ✅ Puter.js URL
+        thumbnail: thumbnailUrl || '', // ✅ UploadThing URL
+        size: size || '0 MB',
+        quality: quality || '1080p',
         folderId: folderId
       },
       include: {
@@ -220,7 +169,7 @@ export async function GET(request: NextRequest) {
       description: video.description,
       duration: video.duration,
       views: video.views,
-      uniqueViewers: video.progress.filter(p => p.viewCounted).length, // ✅ Only count 50-sec viewers
+      uniqueViewers: video.progress.filter(p => p.viewCounted).length,
       totalWatchTime: (() => {
         const totalSeconds = video.progress.reduce((sum, p) => sum + p.watchedSeconds, 0);
         return `${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m`;

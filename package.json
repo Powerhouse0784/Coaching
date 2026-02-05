@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
+    "@heyputer/puter.js": "^2.2.8",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/adapter-neon": "^7.2.0",
     "@prisma/adapter-pg-worker": "^6.9.0",
@@ -33,6 +34,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "effect": "3.17.7",
     "framer-motion": "^12.26.2",
     "groq-sdk": "^0.37.0",
     "jspdf": "^4.0.0",
