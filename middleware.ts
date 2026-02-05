@@ -20,7 +20,8 @@ export async function middleware(req: NextRequest) {
       console.log("❌ No token, redirecting to home")
       return NextResponse.redirect(new URL('/', req.url))
     }
-    if (token.role !== "STUDENT") {
+    // ✅ FIXED: Allow both STUDENT and TEACHER roles to access /student
+    if (token.role !== "STUDENT" && token.role !== "TEACHER") {
       console.log("❌ Blocked STUDENT route - Role:", token?.role)
       return NextResponse.redirect(new URL("/unauthorized", req.url))
     }
@@ -32,6 +33,7 @@ export async function middleware(req: NextRequest) {
       console.log("❌ No token, redirecting to home")
       return NextResponse.redirect(new URL('/', req.url))
     }
+    // ✅ Only TEACHER role can access /teacher
     if (token.role !== "TEACHER") {
       console.log("❌ Blocked TEACHER route - Role:", token?.role)
       return NextResponse.redirect(new URL("/unauthorized", req.url))
