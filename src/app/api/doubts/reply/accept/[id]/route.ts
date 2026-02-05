@@ -3,18 +3,15 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { prisma } from "@/lib/prisma"
 
-interface RouteParams {
-  params: {
-    id: string
-  }
-}
-
 interface ReplyData {
   studentId: string
   doubtId: string
 }
 
-export async function POST(req: NextRequest, { params }: RouteParams) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -25,13 +22,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const { id } = params
+    // ✅ Await params
+    const { id } = await params
 
-    // Use prisma.$queryRaw with proper typing
-    const replyResults = await prisma.$queryRaw<
-      ReplyData[]
-    >`
-      SELECT d.studentId, d.id as doubtId 
+    // ✅ Fixed: Use prisma.$queryRaw properly
+    const replyResults = await prisma.$queryRaw<ReplyData[]>`
+      SELECT d."studentId", d.id as "doubtId" 
       FROM "doubtReply" dr 
       JOIN "doubt" d ON dr."doubtId" = d.id 
       WHERE dr.id = ${id}
