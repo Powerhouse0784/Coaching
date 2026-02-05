@@ -72,42 +72,45 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
   const [error, setError] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+  e.preventDefault();
+  setLoading(true);
+  setError('');
 
-    try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        role,
-        redirect: false,
-      });
+  try {
+    const result = await signIn('credentials', {
+      email,
+      password,
+      role,
+      redirect: false,
+    });
 
-      if (result?.error) {
-        if (result.error.includes('registered as')) {
-          setError(result.error);
-        } else if (result.error === 'Invalid credentials') {
-          setError('User not found or invalid password. Please check your credentials.');
-        } else if (result.error === 'Account is deactivated') {
-          setError('Your account has been deactivated. Please contact support.');
-        } else {
-          setError(result.error);
-        }
-      } else if (result?.ok) {
-        // Redirect based on role
-        if (role === 'TEACHER') {
-          router.push('/teacher');
-        } else {
-          router.push('/student');
-        }
+    if (result?.error) {
+      if (result.error.includes('registered as')) {
+        setError(result.error);
+      } else if (result.error === 'Invalid credentials') {
+        setError('User not found or invalid password. Please check your credentials.');
+      } else if (result.error === 'Account is deactivated') {
+        setError('Your account has been deactivated. Please contact support.');
+      } else {
+        setError(result.error);
       }
-    } catch (err: any) {
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
+    } else if (result?.ok) {
+      // ✅ IMPORTANT: Wait for session to be ready before redirecting
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // ✅ Use window.location instead of router.push for hard refresh
+      if (role === 'TEACHER') {
+        window.location.href = '/teacher';
+      } else {
+        window.location.href = '/student';
+      }
     }
-  };
+  } catch (err: any) {
+    setError('Something went wrong. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleGoogleSignIn = async () => {
     await signIn('google', { callbackUrl: '/' });
@@ -330,35 +333,35 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
       setSuccess(`${role === 'STUDENT' ? 'Student' : 'Teacher'} account created successfully! Logging you in...`);
 
       // Auto-login
-      setTimeout(async () => {
-        try {
-          const result = await signIn('credentials', {
-            email: formData.email,
-            password: formData.password,
-            role: role,
-            redirect: false,
-          });
+      // Auto-login after registration
+setTimeout(async () => {
+  try {
+    const result = await signIn('credentials', {
+      email: formData.email,
+      password: formData.password,
+      role: role,
+      redirect: false,
+    });
 
-          if (result?.error) {
-            setError('Registration successful but auto-login failed. Please login manually.');
-            setTimeout(() => onSwitchToLogin(), 2000);
-          } else if (result?.ok) {
-            // Redirect based on role
-            if (role === 'TEACHER') {
-              router.push('/teacher');
-            } else {
-              if (onBack) {
-                onBack();
-              } else {
-                router.push('/student');
-              }
-            }
-          }
-        } catch (err: any) {
-          setError('Registration successful. Please login manually.');
-          setTimeout(() => onSwitchToLogin(), 2000);
-        }
-      }, 1000);
+    if (result?.error) {
+      setError('Registration successful but auto-login failed. Please login manually.');
+      setTimeout(() => onSwitchToLogin(), 2000);
+    } else if (result?.ok) {
+      // ✅ Wait for session
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // ✅ Hard redirect
+      if (role === 'TEACHER') {
+        window.location.href = '/teacher';
+      } else {
+        window.location.href = '/student';
+      }
+    }
+      } catch (err: any) {
+        setError('Registration successful. Please login manually.');
+        setTimeout(() => onSwitchToLogin(), 2000);
+      }
+    }, 1000);
     } catch (err: any) {
       if (err.message.includes('Email already registered')) {
         setError('This email is already registered. Please login instead.');
