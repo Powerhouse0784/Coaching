@@ -52,7 +52,7 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        role: { label: "Role", type: "text" }, // Add role field
+        role: { label: "Role", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -86,16 +86,17 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Account is deactivated")
         }
 
-        // Validate role if provided (for login with role selection)
+        // Validate role if provided
         if (credentials.role && credentials.role !== user.role) {
           throw new Error(`This account is registered as ${user.role.toLowerCase()}. Please select the correct role.`)
         }
 
+        // ✅ IMPORTANT: Return the role from database
         return {
           id: user.id,
           email: user.email,
           name: user.name,
-          role: user.role,
+          role: user.role, // This must be "TEACHER" or "STUDENT" from DB
           avatar: user.avatar,
         }
       },
@@ -105,9 +106,9 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.id = user.id as string
-        ;(token as any).role = (user as any).role
-        ;(token as any).avatar = (user as any).avatar
+        token.id = user.id
+        token.role = user.role // ✅ Set role in JWT
+        token.avatar = user.avatar
       }
       
       if (trigger === "update" && session) {
@@ -119,10 +120,17 @@ export const authOptions: NextAuthOptions = {
     
     async session({ session, token }) {
       if (token && session.user) {
-        session.user.id = token.id as string
-        ;(session.user as any).role = (token as any).role as string
-        ;(session.user as any).avatar = (token as any).avatar as string
+        session.user.id = token.id
+        session.user.role = token.role // ✅ Set role in session
+        session.user.avatar = token.avatar as string | null
       }
+      
+      console.log("📝 Session created:", {
+        userId: session.user.id,
+        role: session.user.role,
+        email: session.user.email
+      })
+      
       return session
     },
     
@@ -133,20 +141,20 @@ export const authOptions: NextAuthOptions = {
           include: { student: true, teacher: true },
         })
         
-        // Create student record for Google sign-in if doesn't exist
         if (existingUser && !existingUser.student && !existingUser.teacher) {
           await prisma.student.create({
             data: {
               userId: existingUser.id,
             },
           })
-          // Update role to STUDENT
           await prisma.user.update({
             where: { id: existingUser.id },
             data: { role: "STUDENT" },
           })
         }
       }
+      
+      // ✅ Always return true to allow sign in
       return true
     },
   },
