@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma"
 
 export async function POST(
   req: NextRequest, 
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -17,7 +17,8 @@ export async function POST(
       )
     }
 
-    const { id } = params
+    // ✅ Await params
+    const { id } = await params
 
     // Raw query for student
     const studentResult = await prisma.$queryRaw`
