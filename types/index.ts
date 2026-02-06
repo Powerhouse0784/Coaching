@@ -1,14 +1,15 @@
 // types/index.ts - Global TypeScript types
+// ✅ UPDATED: Compatible with database sessions
 
 import { User, Student, Teacher, Course, Lecture, Enrollment } from "@prisma/client"
 
 // ============================================
-// AUTH TYPES
+// AUTH TYPES (Updated for database sessions)
 // ============================================
 export interface SessionUser {
   id: string
   email: string | null
-  name: string
+  name: string | null
   role: "STUDENT" | "TEACHER" | "ADMIN"
   avatar: string | null
 }
