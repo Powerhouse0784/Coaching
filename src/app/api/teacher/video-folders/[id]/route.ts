@@ -1,11 +1,12 @@
 // app/api/teacher/video-folders/[id]/route.ts
-// ✅ COMPLETE - Works on Vercel with UploadThing
+// ✅ COMPLETE - Works on Vercel with UploadThing + Auto-deletes files
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { deleteUploadThingFiles } from '@/lib/uploadthing';
 
-// DELETE - Delete a folder
+// DELETE - Delete a folder and all its videos + thumbnails from UploadThing
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -31,8 +32,12 @@ export async function DELETE(
 
     const { id } = await params;
 
+    // ✅ Get folder with all videos to delete from UploadThing
     const folder = await prisma.videoFolder.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        videos: true // Get all videos in this folder
+      }
     });
 
     if (!folder) {
@@ -43,11 +48,45 @@ export async function DELETE(
       return NextResponse.json({ error: 'You can only delete your own folders' }, { status: 403 });
     }
 
+    // ✅ Collect all file URLs to delete from UploadThing
+    const filesToDelete: string[] = [];
+    
+    // Add folder thumbnail
+    if (folder.thumbnail) {
+      filesToDelete.push(folder.thumbnail);
+    }
+    
+    // Add all videos and their thumbnails
+    folder.videos.forEach(video => {
+      if (video.videoUrl) {
+        filesToDelete.push(video.videoUrl);
+      }
+      if (video.thumbnail) {
+        filesToDelete.push(video.thumbnail);
+      }
+    });
+
+    console.log(`🗑️ Deleting folder "${folder.name}" with ${folder.videos.length} videos`);
+    console.log(`📦 Total files to delete from UploadThing: ${filesToDelete.length}`);
+
+    // ✅ Delete from database first
     await prisma.videoFolder.delete({
       where: { id }
     });
 
-    return NextResponse.json({ message: 'Folder deleted successfully' });
+    // ✅ Then delete from UploadThing storage (async, doesn't block response)
+    if (filesToDelete.length > 0) {
+      deleteUploadThingFiles(filesToDelete).catch(err => {
+        console.error('⚠️ Failed to delete some files from UploadThing:', err);
+        // Don't fail the request if cleanup fails
+      });
+    }
+
+    return NextResponse.json({ 
+      message: 'Folder deleted successfully',
+      deletedVideos: folder.videos.length,
+      deletedFiles: filesToDelete.length
+    });
   } catch (error) {
     console.error('Error deleting folder:', error);
     return NextResponse.json({ error: 'Failed to delete folder' }, { status: 500 });
@@ -104,7 +143,15 @@ export async function PATCH(
     if (chapter) updateData.chapter = chapter;
     if (description !== undefined) updateData.description = description;
     if (isPublic !== undefined) updateData.isPublic = isPublic;
-    if (thumbnailUrl) updateData.thumbnail = thumbnailUrl; // ✅ URL from UploadThing
+    
+    // ✅ If new thumbnail provided, delete old one from UploadThing
+    if (thumbnailUrl && folder.thumbnail && folder.thumbnail !== thumbnailUrl) {
+      deleteUploadThingFiles([folder.thumbnail]).catch(err => {
+        console.error('⚠️ Failed to delete old thumbnail:', err);
+      });
+    }
+    
+    if (thumbnailUrl) updateData.thumbnail = thumbnailUrl;
 
     const updatedFolder = await prisma.videoFolder.update({
       where: { id },

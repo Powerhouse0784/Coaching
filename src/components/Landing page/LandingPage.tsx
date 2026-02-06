@@ -268,6 +268,9 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
 };
 
 // Register Component with Role Selection
+// Updated Register Component with Teacher Code Verification
+// Add this to replace your RegisterPage component
+
 const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void }> = ({ onSwitchToLogin, onBack }) => {
   const router = useRouter();
   const [formData, setFormData] = useState<FormData>({
@@ -277,11 +280,14 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
     confirmPassword: '',
   });
   const [role, setRole] = useState<'STUDENT' | 'TEACHER'>('STUDENT');
+  const [teacherCode, setTeacherCode] = useState<string>(''); // ✅ NEW: Teacher code state
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
   const [agreedToTerms, setAgreedToTerms] = useState<boolean>(false);
+
+  const TEACHER_REGISTRATION_CODE = 'P8YGJCVR2'; // ✅ Teacher code constant
 
   const handleChange = (field: keyof FormData, value: string): void => {
     setFormData({ ...formData, [field]: value });
@@ -309,6 +315,18 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
       return;
     }
 
+    // ✅ NEW: Validate teacher code if role is TEACHER
+    if (role === 'TEACHER') {
+      if (!teacherCode.trim()) {
+        setError('Please enter the teacher registration code');
+        return;
+      }
+      if (teacherCode.trim() !== TEACHER_REGISTRATION_CODE) {
+        setError('Invalid teacher registration code. Please contact administration for the correct code.');
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -332,36 +350,35 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
 
       setSuccess(`${role === 'STUDENT' ? 'Student' : 'Teacher'} account created successfully! Logging you in...`);
 
-      // Auto-login
       // Auto-login after registration
-setTimeout(async () => {
-  try {
-    const result = await signIn('credentials', {
-      email: formData.email,
-      password: formData.password,
-      role: role,
-      redirect: false,
-    });
+      setTimeout(async () => {
+        try {
+          const result = await signIn('credentials', {
+            email: formData.email,
+            password: formData.password,
+            role: role,
+            redirect: false,
+          });
 
-    if (result?.error) {
-      setError('Registration successful but auto-login failed. Please login manually.');
-      setTimeout(() => onSwitchToLogin(), 2000);
-    } else if (result?.ok) {
-      // ✅ Wait for session
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // ✅ Hard redirect
-      if (role === 'TEACHER') {
-        window.location.href = '/teacher';
-      } else {
-        window.location.href = '/student';
-      }
-    }
-      } catch (err: any) {
-        setError('Registration successful. Please login manually.');
-        setTimeout(() => onSwitchToLogin(), 2000);
-      }
-    }, 1000);
+          if (result?.error) {
+            setError('Registration successful but auto-login failed. Please login manually.');
+            setTimeout(() => onSwitchToLogin(), 2000);
+          } else if (result?.ok) {
+            // Wait for session
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Hard redirect
+            if (role === 'TEACHER') {
+              window.location.href = '/teacher';
+            } else {
+              window.location.href = '/student';
+            }
+          }
+        } catch (err: any) {
+          setError('Registration successful. Please login manually.');
+          setTimeout(() => onSwitchToLogin(), 2000);
+        }
+      }, 1000);
     } catch (err: any) {
       if (err.message.includes('Email already registered')) {
         setError('This email is already registered. Please login instead.');
@@ -440,7 +457,11 @@ setTimeout(async () => {
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setRole('STUDENT')}
+                  onClick={() => {
+                    setRole('STUDENT');
+                    setTeacherCode(''); // Clear teacher code when switching to student
+                    setError('');
+                  }}
                   className={`p-4 rounded-xl border-2 transition-all ${
                     role === 'STUDENT'
                       ? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -453,7 +474,10 @@ setTimeout(async () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRole('TEACHER')}
+                  onClick={() => {
+                    setRole('TEACHER');
+                    setError('');
+                  }}
                   className={`p-4 rounded-xl border-2 transition-all ${
                     role === 'TEACHER'
                       ? 'border-purple-500 bg-purple-50 text-purple-700'
@@ -467,12 +491,37 @@ setTimeout(async () => {
               </div>
             </div>
 
+            {/* ✅ NEW: Teacher Code Input (Only shown when TEACHER is selected) */}
+            {role === 'TEACHER' && (
+              <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
+                <label className="block text-sm font-medium text-purple-900 mb-2 flex items-center gap-2">
+                  <Lock className="w-4 h-4" />
+                  Teacher Registration Code *
+                </label>
+                <input
+                  type="text"
+                  value={teacherCode}
+                  onChange={(e) => {
+                    setTeacherCode(e.target.value.toUpperCase());
+                    setError('');
+                  }}
+                  placeholder="Enter teacher code"
+                  required
+                  className="w-full px-4 py-3 border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition bg-white"
+                  maxLength={20}
+                />
+                <p className="text-xs text-purple-700 mt-2 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Contact administration to get the teacher registration code
+                </p>
+              </div>
+            )}
+
             {/* Full Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
               <div className="relative">
                 <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-
                 <input
                   type="text"
                   value={formData.name}

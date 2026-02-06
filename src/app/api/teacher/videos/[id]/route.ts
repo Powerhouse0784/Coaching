@@ -1,9 +1,10 @@
 // app/api/teacher/videos/[id]/route.ts
-// ✅ COMPLETE - Works on Vercel with UploadThing
+// ✅ COMPLETE - Works on Vercel with UploadThing + Auto-deletes files
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { deleteUploadThingFiles } from '@/lib/uploadthing';
 
 // PATCH - Update a video
 export async function PATCH(
@@ -52,7 +53,15 @@ export async function PATCH(
     
     if (title !== null && title.trim() !== '') updateData.title = title;
     if (description !== undefined) updateData.description = description;
-    if (thumbnailUrl) updateData.thumbnail = thumbnailUrl; // ✅ URL from UploadThing
+    
+    // ✅ If new thumbnail provided, delete old one from UploadThing
+    if (thumbnailUrl && video.thumbnail && video.thumbnail !== thumbnailUrl) {
+      deleteUploadThingFiles([video.thumbnail]).catch(err => {
+        console.error('⚠️ Failed to delete old thumbnail:', err);
+      });
+    }
+    
+    if (thumbnailUrl) updateData.thumbnail = thumbnailUrl;
 
     const updatedVideo = await prisma.video.update({
       where: { id },
@@ -97,7 +106,7 @@ export async function PATCH(
   }
 }
 
-// DELETE - Delete a video
+// DELETE - Delete a video and its thumbnail from UploadThing
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -136,11 +145,36 @@ export async function DELETE(
       return NextResponse.json({ error: 'You can only delete videos from your own folders' }, { status: 403 });
     }
 
+    // ✅ Collect files to delete from UploadThing
+    const filesToDelete: string[] = [];
+    
+    if (video.videoUrl) {
+      filesToDelete.push(video.videoUrl);
+    }
+    if (video.thumbnail) {
+      filesToDelete.push(video.thumbnail);
+    }
+
+    console.log(`🗑️ Deleting video "${video.title}"`);
+    console.log(`📦 Files to delete from UploadThing: ${filesToDelete.length}`);
+
+    // ✅ Delete from database first
     await prisma.video.delete({
       where: { id }
     });
 
-    return NextResponse.json({ message: 'Video deleted successfully' });
+    // ✅ Then delete from UploadThing storage (async, doesn't block response)
+    if (filesToDelete.length > 0) {
+      deleteUploadThingFiles(filesToDelete).catch(err => {
+        console.error('⚠️ Failed to delete files from UploadThing:', err);
+        // Don't fail the request if cleanup fails
+      });
+    }
+
+    return NextResponse.json({ 
+      message: 'Video deleted successfully',
+      deletedFiles: filesToDelete.length
+    });
 
   } catch (error) {
     console.error('Error deleting video:', error);
