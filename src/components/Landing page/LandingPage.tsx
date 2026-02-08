@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 // Import your components
-import { AssignmentCard } from "@/components/assignments/AssignmentCard";
+import StudentAssignmentDashboard from "@/components/assignments/AssignmentCard";
 import LiveClasses from "@/components/live class/LiveClass";
 import PaymentDemo from "@/components/payment/PaymentCheck";
 import StudyPlanner from "@/components/study planner/Study";
@@ -36,31 +36,6 @@ interface FormData {
   confirmPassword: string;
 }
 
-// Mock data for AssignmentCard
-const mockAssignments = [
-  {
-    id: "1",
-    title: "Build a Todo App with React",
-    description: "Create a fully functional todo application using React hooks. Include add, edit, delete, and filter functionality.",
-    totalMarks: 20,
-    dueDate: new Date("2026-02-15T18:00:00Z"),
-    teacher: {
-      user: { name: "John Doe" }
-    },
-    submissions: []
-  },
-  {
-    id: "2", 
-    title: "React Router Project",
-    description: "Build a multi-page portfolio website with React Router v6. Include nested routes, protected routes, and navigation.",
-    totalMarks: 25,
-    dueDate: new Date("2026-02-20T18:00:00Z"),
-    teacher: {
-      user: { name: "Jane Smith" }
-    },
-    submissions: []
-  }
-];
 
 const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void }> = ({ onSwitchToRegister, onBack }) => {
   const router = useRouter();
@@ -730,21 +705,15 @@ const ProtectedLanding = () => {
       component: <LiveClasses />
     },
     {
-      id: 'assignments',
-      icon: FileText,
-      title: 'Smart Assignments',
-      description: 'AI-powered assignment system with automatic grading and detailed feedback',
-      color: 'from-purple-500 to-pink-500',
-      stats: '10K+ Completed',
-      tag: 'Top Rated',
-      component: (
-        <div className="space-y-4">
-          {mockAssignments.map((assignment) => (
-            <AssignmentCard key={assignment.id} assignment={assignment} />
-          ))}
-        </div>
-      )
-    },
+  id: 'assignments',
+  icon: FileText,
+  title: 'Smart Assignments',
+  description: 'AI-powered assignment system with automatic grading and detailed feedback',
+  color: 'from-purple-500 to-pink-500',
+  stats: '10K+ Completed',
+  tag: 'Top Rated',
+  component: <StudentAssignmentDashboard />
+},
     {
       id: 'study-planner',
       icon: Brain,

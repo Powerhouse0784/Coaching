@@ -80,9 +80,10 @@ model User {
   sessions      Session[]
 
   // App relations
-  student       Student?        @relation("UserStudent")
-  teacher       Teacher?        @relation("UserTeacher")
-  videoProgress VideoProgress[]
+  student            Student?            @relation("UserStudent")
+  teacher            Teacher?            @relation("UserTeacher")
+  videoProgress      VideoProgress[]
+  assignmentComments AssignmentComment[] @relation("UserAssignmentComments")
 
   @@map("users")
 }
@@ -93,6 +94,9 @@ model Student {
   user        User         @relation("UserStudent", fields: [userId], references: [id])
   submissions Submission[]
   enrollments Enrollment[]
+
+  // New Assignment System
+  assignmentSubmissions AssignmentSubmission[] @relation("StudentAssignmentSubmissions")
 
   @@map("students")
 }
@@ -106,6 +110,9 @@ model Teacher {
   courses      Course[]
   assignments  Assignment[]
   videoFolders VideoFolder[]
+
+  // New Assignment System
+  assignmentsV2 AssignmentV2[] @relation("TeacherAssignments")
 
   @@map("teachers")
 }
@@ -182,6 +189,7 @@ model Enrollment {
   @@map("enrollments")
 }
 
+// ========== OLD ASSIGNMENT SYSTEM (Keep for backward compatibility) ==========
 model Assignment {
   id          String       @id @default(uuid())
   title       String
@@ -221,6 +229,81 @@ model Submission {
   @@map("submissions")
 }
 
+// ========== NEW ASSIGNMENT SYSTEM (Professional with PDF uploads and collaboration) ==========
+model AssignmentV2 {
+  id          String   @id @default(uuid())
+  title       String
+  description String   @db.Text
+  subject     String
+  class       String
+  dueDate     DateTime
+  totalMarks  Int
+  fileUrl     String?
+  fileName    String?
+  fileSize    String?
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacherId String
+  teacher   Teacher @relation("TeacherAssignments", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  submissions AssignmentSubmission[]
+  comments    AssignmentComment[]
+
+  @@map("assignments_v2")
+  @@index([teacherId])
+  @@index([subject])
+  @@index([class])
+  @@index([dueDate])
+}
+
+model AssignmentSubmission {
+  id          String   @id @default(uuid())
+  fileUrl     String
+  fileName    String
+  fileSize    String
+  remarks     String?  @db.Text
+  status      String   @default("pending") // pending, completed, late
+  isCompleted Boolean  @default(false)
+  submittedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignmentId String
+  assignment   AssignmentV2 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  studentId String
+  student   Student @relation("StudentAssignmentSubmissions", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+  @@map("assignment_submissions_v2")
+  @@index([assignmentId])
+  @@index([studentId])
+  @@index([status])
+}
+
+model AssignmentComment {
+  id        String   @id @default(uuid())
+  content   String   @db.Text
+  fileUrl   String?
+  fileName  String?
+  fileSize  String?
+  likes     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignmentId String
+  assignment   AssignmentV2 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("UserAssignmentComments", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("assignment_comments")
+  @@index([assignmentId])
+  @@index([userId])
+}
+
+// ========== VIDEO SYSTEM ==========
 model VideoFolder {
   id          String   @id @default(uuid())
   name        String
