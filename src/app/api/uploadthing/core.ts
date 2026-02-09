@@ -97,6 +97,33 @@ export const ourFileRouter = {
       console.log("Video thumbnail uploaded:", file.url);
       return { url: file.url };
     }),
+    // Doubt image upload
+doubtImage: f({ image: { maxFileSize: "4MB", maxFileCount: 1 } })
+  .middleware(async () => {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      throw new Error("Unauthorized");
+    }
+    return { userId: session.user.id };
+  })
+  .onUploadComplete(async ({ metadata, file }) => {
+    console.log("Doubt image uploaded:", file.url);
+    return { url: file.url };
+  }),
+
+// Doubt PDF upload
+doubtPdf: f({ pdf: { maxFileSize: "8MB", maxFileCount: 1 } })
+  .middleware(async () => {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      throw new Error("Unauthorized");
+    }
+    return { userId: session.user.id };
+  })
+  .onUploadComplete(async ({ metadata, file }) => {
+    console.log("Doubt PDF uploaded:", file.url);
+    return { url: file.url };
+  }),
 
   // Profile avatar uploader
   profileAvatar: f({ image: { maxFileSize: "2MB", maxFileCount: 1 } })

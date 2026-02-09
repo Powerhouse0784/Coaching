@@ -85,6 +85,10 @@ model User {
   videoProgress      VideoProgress[]
   assignmentComments AssignmentComment[] @relation("UserAssignmentComments")
 
+
+  doubtReplies      DoubtReply[]       @relation("UserDoubtReplies")
+  doubtUpvotes      DoubtUpvote[]      @relation("UserDoubtUpvotes")
+  doubtReplyUpvotes DoubtReplyUpvote[] @relation("UserDoubtReplyUpvotes")
   @@map("users")
 }
 
@@ -95,6 +99,8 @@ model Student {
   submissions Submission[]
   enrollments Enrollment[]
 
+  doubts Doubt[] @relation("StudentDoubts")
+  
   // New Assignment System
   assignmentSubmissions AssignmentSubmission[] @relation("StudentAssignmentSubmissions")
 
@@ -421,4 +427,106 @@ model ChatMessage {
 
   @@map("chat_messages")
   @@index([conversationId])
+}
+
+// ========== DOUBT SYSTEM ==========
+model Doubt {
+  id          String   @id @default(uuid())
+  title       String
+  description String   @db.Text
+  subject     String
+  class       String?
+  priority    String   @default("normal") // low, normal, high, urgent
+  
+  // Files
+  imageUrl    String?
+  imageName   String?
+  pdfUrl      String?
+  pdfName     String?
+  
+  // Status
+  status      String   @default("open") // open, solved, closed
+  isSolved    Boolean  @default(false)
+  solvedAt    DateTime?
+  
+  // Engagement
+  views       Int      @default(0)
+  upvotes     Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  studentId   String
+  student     Student  @relation("StudentDoubts", fields: [studentId], references: [id], onDelete: Cascade)
+  
+  replies     DoubtReply[]
+  upvotedBy   DoubtUpvote[]
+
+  @@map("doubts")
+  @@index([studentId])
+  @@index([subject])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model DoubtReply {
+  id          String   @id @default(uuid())
+  content     String   @db.Text
+  
+  // Files
+  imageUrl    String?
+  imageName   String?
+  pdfUrl      String?
+  pdfName     String?
+  
+  // Status
+  isPinned    Boolean  @default(false)
+  isAccepted  Boolean  @default(false)
+  upvotes     Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  doubtId     String
+  doubt       Doubt    @relation(fields: [doubtId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation("UserDoubtReplies", fields: [userId], references: [id], onDelete: Cascade)
+  
+  upvotedBy   DoubtReplyUpvote[]
+
+  @@map("doubt_replies")
+  @@index([doubtId])
+  @@index([userId])
+  @@index([isPinned])
+}
+
+model DoubtUpvote {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  doubtId   String
+  doubt     Doubt    @relation(fields: [doubtId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User     @relation("UserDoubtUpvotes", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([doubtId, userId])
+  @@map("doubt_upvotes")
+}
+
+model DoubtReplyUpvote {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  replyId   String
+  reply     DoubtReply @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User     @relation("UserDoubtReplyUpvotes", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([replyId, userId])
+  @@map("doubt_reply_upvotes")
 }
