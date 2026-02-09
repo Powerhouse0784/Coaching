@@ -5,18 +5,46 @@ import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useUploadThing } from '@/lib/uploadthing';
 import {
-  Plus, FileText, Calendar, Clock, Users, Download, Trash2, Search,
+  Plus, FileText, Calendar, Users, Download, Trash2, Search,
   AlertCircle, Loader, X, Upload, CheckCircle, XCircle, Eye,
-  MessageSquare, TrendingUp, Award, Filter, RefreshCw
+  MessageSquare, RefreshCw, User, Mail, MapPin, Phone, Cake
 } from 'lucide-react';
+
+interface StudentProfile {
+  id: string;
+  userId: string;
+  name: string | null;
+  email: string | null;
+  avatar: string | null;
+  phone: string | null;
+  location: string | null;
+  dateOfBirth: string | null;
+  bio: string | null;
+}
+
+interface Submission {
+  id: string;
+  status: string;
+  isCompleted: boolean;
+  fileUrl: string;
+  fileName: string;
+  fileSize: string;
+  remarks: string | null;
+  submittedAt: string;
+  student: StudentProfile;
+}
 
 interface Comment {
   id: string;
   content: string;
-  userName: string | null;
-  userEmail: string | null;
-  userAvatar: string | null;
   createdAt: string;
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    avatar: string | null;
+    role: string;
+  };
 }
 
 interface Assignment {
@@ -26,15 +54,16 @@ interface Assignment {
   subject: string;
   class: string;
   dueDate: string;
-  totalMarks: number;
-  fileUrl: string | null;
+  fileUrl: string;
   fileName: string | null;
   fileSize: string | null;
   isPublished: boolean;
   createdAt: string;
   stats: {
     totalSubmissions: number;
+    totalComments: number;
   };
+  submissions: Submission[];
   comments: Comment[];
 }
 
@@ -48,34 +77,18 @@ export default function AssignmentManager() {
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedClass, setSelectedClass] = useState<string>('all');
 
-  // Fetch assignments
   const fetchAssignments = async () => {
     setLoading(true);
     try {
       const response = await fetch('/api/teacher/assignments');
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Server error:', errorData);
-        alert(`Error: ${errorData.error || 'Failed to load assignments'}`);
-        setLoading(false);
-        return;
-      }
-      
       const data = await response.json();
-      
-      console.log('Fetched assignments:', data);
       
       if (data.success) {
         setAssignments(data.assignments || []);
         setFilteredAssignments(data.assignments || []);
-      } else {
-        console.error('Failed to fetch assignments:', data.error);
-        alert('Error: ' + data.error);
       }
     } catch (error) {
       console.error('Error fetching assignments:', error);
-      alert('Failed to load assignments. Check console for details.');
     } finally {
       setLoading(false);
     }
@@ -85,7 +98,6 @@ export default function AssignmentManager() {
     fetchAssignments();
   }, []);
 
-  // Filter assignments
   useEffect(() => {
     let filtered = assignments;
 
@@ -109,9 +121,8 @@ export default function AssignmentManager() {
     setFilteredAssignments(filtered);
   }, [searchQuery, selectedSubject, selectedClass, assignments]);
 
-  // Delete assignment
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this assignment? This will also delete all student submissions.')) {
+    if (!confirm('Delete this assignment? All submissions will be deleted.')) {
       return;
     }
 
@@ -126,22 +137,20 @@ export default function AssignmentManager() {
         setAssignments((prev) => prev.filter((a) => a.id !== id));
         alert('Assignment deleted successfully');
       } else {
-        alert('Failed to delete assignment: ' + data.error);
+        alert('Failed to delete: ' + data.error);
       }
     } catch (error) {
       console.error('Error deleting assignment:', error);
-      alert('An error occurred while deleting the assignment');
+      alert('An error occurred');
     }
   };
 
-  // Get unique subjects and classes for filters
   const subjects = Array.from(new Set(assignments.map((a) => a.subject)));
   const classes = Array.from(new Set(assignments.map((a) => a.class)));
 
-  // Calculate stats - ✅ REMOVED completed
   const totalAssignments = assignments.length;
   const totalSubmissions = assignments.reduce((sum, a) => sum + a.stats.totalSubmissions, 0);
-  const totalComments = assignments.reduce((sum, a) => sum + a.comments.length, 0);
+  const totalComments = assignments.reduce((sum, a) => sum + a.stats.totalComments, 0);
 
   if (loading) {
     return (
@@ -156,17 +165,15 @@ export default function AssignmentManager() {
 
   return (
     <div className="p-6 sm:p-8">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Assignment Manager</h1>
-          <p className="text-gray-600">Create and manage assignments for your students</p>
+          <p className="text-gray-600">Create and manage assignments</p>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={fetchAssignments}
             className="p-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition"
-            title="Refresh"
           >
             <RefreshCw className="w-5 h-5 text-gray-600" />
           </button>
@@ -180,43 +187,34 @@ export default function AssignmentManager() {
         </div>
       </div>
 
-      {/* Stats Cards - ✅ REMOVED Completed card */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <FileText className="w-6 h-6 text-blue-600" />
-            </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition">
+          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4">
+            <FileText className="w-6 h-6 text-blue-600" />
           </div>
           <p className="text-3xl font-bold text-gray-900 mb-1">{totalAssignments}</p>
           <p className="text-sm text-gray-600">Total Assignments</p>
         </div>
 
-        <div className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <Users className="w-6 h-6 text-purple-600" />
-            </div>
+        <div className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition">
+          <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4">
+            <Users className="w-6 h-6 text-purple-600" />
           </div>
           <p className="text-3xl font-bold text-gray-900 mb-1">{totalSubmissions}</p>
           <p className="text-sm text-gray-600">Total Submissions</p>
         </div>
 
-        <div className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-              <MessageSquare className="w-6 h-6 text-orange-600" />
-            </div>
+        <div className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition">
+          <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mb-4">
+            <MessageSquare className="w-6 h-6 text-orange-600" />
           </div>
           <p className="text-3xl font-bold text-gray-900 mb-1">{totalComments}</p>
           <p className="text-sm text-gray-600">Total Comments</p>
         </div>
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Search */}
           <div className="md:col-span-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -230,7 +228,6 @@ export default function AssignmentManager() {
             </div>
           </div>
 
-          {/* Subject Filter */}
           <div>
             <select
               value={selectedSubject}
@@ -239,14 +236,11 @@ export default function AssignmentManager() {
             >
               <option value="all">All Subjects</option>
               {subjects.map((subject) => (
-                <option key={subject} value={subject}>
-                  {subject}
-                </option>
+                <option key={subject} value={subject}>{subject}</option>
               ))}
             </select>
           </div>
 
-          {/* Class Filter */}
           <div>
             <select
               value={selectedClass}
@@ -255,37 +249,24 @@ export default function AssignmentManager() {
             >
               <option value="all">All Classes</option>
               {classes.map((cls) => (
-                <option key={cls} value={cls}>
-                  {cls}
-                </option>
+                <option key={cls} value={cls}>{cls}</option>
               ))}
             </select>
           </div>
         </div>
       </div>
 
-      {/* Assignments List */}
       {filteredAssignments.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-gray-900 mb-2">
-            {searchQuery || selectedSubject !== 'all' || selectedClass !== 'all'
-              ? 'No assignments match your filters'
-              : 'No assignments yet'}
-          </h3>
-          <p className="text-gray-600 mb-6">
-            {searchQuery || selectedSubject !== 'all' || selectedClass !== 'all'
-              ? 'Try adjusting your search or filters'
-              : 'Create your first assignment to get started'}
-          </p>
-          {!searchQuery && selectedSubject === 'all' && selectedClass === 'all' && (
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition font-semibold"
-            >
-              Create Assignment
-            </button>
-          )}
+          <h3 className="text-xl font-bold text-gray-900 mb-2">No assignments yet</h3>
+          <p className="text-gray-600 mb-6">Create your first assignment to get started</p>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition font-semibold"
+          >
+            Create Assignment
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6">
@@ -294,12 +275,12 @@ export default function AssignmentManager() {
               key={assignment.id}
               assignment={assignment}
               onDelete={handleDelete}
+              onCommentDelete={fetchAssignments}
             />
           ))}
         </div>
       )}
 
-      {/* Create Assignment Modal */}
       {showCreateModal && (
         <CreateAssignmentModal
           onClose={() => setShowCreateModal(false)}
@@ -313,31 +294,49 @@ export default function AssignmentManager() {
   );
 }
 
-// Assignment Card Component
 function AssignmentCard({
   assignment,
   onDelete,
+  onCommentDelete,
 }: {
   assignment: Assignment;
   onDelete: (id: string) => void;
+  onCommentDelete: () => void;
 }) {
+  const [showSubmissions, setShowSubmissions] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<StudentProfile | null>(null);
+  
   const dueDate = new Date(assignment.dueDate);
   const now = new Date();
-  
-  // ✅ FIXED: Proper days calculation - set time to midnight for accurate day difference
-  const dueDateMidnight = new Date(dueDate);
-  dueDateMidnight.setHours(0, 0, 0, 0);
-  const nowMidnight = new Date(now);
-  nowMidnight.setHours(0, 0, 0, 0);
-  
-  const isOverdue = dueDateMidnight < nowMidnight;
-  const daysUntilDue = Math.ceil((dueDateMidnight.getTime() - nowMidnight.getTime()) / (1000 * 60 * 60 * 24));
+  const isOverdue = dueDate < now;
+  const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!confirm('Delete this comment?')) return;
+
+    try {
+      const response = await fetch(`/api/teacher/assignments?commentId=${commentId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('Comment deleted');
+        onCommentDelete();
+      } else {
+        alert('Failed: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('An error occurred');
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 hover:shadow-xl transition-all overflow-hidden">
       <div className="p-6">
-        {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
@@ -367,28 +366,94 @@ function AssignmentCard({
                 </span>
               )}
               <span className="flex items-center gap-1">
-                <Award className="w-4 h-4" />
-                {assignment.totalMarks} marks
-              </span>
-              <span className="flex items-center gap-1">
                 <Users className="w-4 h-4" />
                 {assignment.stats.totalSubmissions} submissions
               </span>
               <span className="flex items-center gap-1">
                 <MessageSquare className="w-4 h-4" />
-                {assignment.comments.length} comments
+                {assignment.stats.totalComments} comments
               </span>
             </div>
           </div>
         </div>
 
-        {/* Stats Row - ✅ REMOVED Completed, only showing Total Submissions */}
         <div className="bg-blue-50 rounded-lg p-4 mb-4">
           <div className="text-center">
             <p className="text-sm text-gray-600 mb-1">Total Submissions</p>
             <p className="text-3xl font-bold text-blue-600">{assignment.stats.totalSubmissions}</p>
           </div>
         </div>
+
+        {/* Submissions Section */}
+        {assignment.submissions.length > 0 && (
+          <div className="mb-4">
+            <button
+              onClick={() => setShowSubmissions(!showSubmissions)}
+              className="flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700 mb-2"
+            >
+              <Users className="w-4 h-4" />
+              {showSubmissions ? 'Hide' : 'View'} Submissions ({assignment.submissions.length})
+            </button>
+            
+            {showSubmissions && (
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3 max-h-96 overflow-y-auto">
+                {assignment.submissions.map((submission) => (
+                  <div key={submission.id} className="bg-white rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
+                          {submission.student.avatar ? (
+                            <img src={submission.student.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                          ) : (
+                            submission.student.name?.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900">{submission.student.name || 'Unknown'}</p>
+                          <p className="text-xs text-gray-500">{submission.student.email}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setSelectedStudent(submission.student)}
+                        className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-200 transition"
+                      >
+                        View Profile
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      <a
+                        href={submission.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:underline font-medium"
+                      >
+                        {submission.fileName}
+                      </a>
+                      <span className="text-xs text-gray-500">({submission.fileSize})</span>
+                    </div>
+                    
+                    {submission.remarks && (
+                      <p className="text-sm text-gray-700 italic mb-2">"{submission.remarks}"</p>
+                    )}
+                    
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>Submitted: {new Date(submission.submittedAt).toLocaleDateString()}</span>
+                      <span className={`px-2 py-1 rounded-full font-semibold ${
+                        submission.isCompleted 
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-orange-100 text-orange-700'
+                      }`}>
+                        {submission.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Comments Section */}
         {assignment.comments.length > 0 && (
@@ -405,11 +470,29 @@ function AssignmentCard({
               <div className="bg-gray-50 rounded-lg p-4 space-y-3 max-h-60 overflow-y-auto">
                 {assignment.comments.map((comment) => (
                   <div key={comment.id} className="bg-white rounded-lg p-3 border border-gray-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="font-semibold text-sm text-gray-900">{comment.userName || 'Unknown'}</p>
-                      <p className="text-xs text-gray-500">
-                        {new Date(comment.createdAt).toLocaleDateString()}
-                      </p>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm text-gray-900">{comment.user.name || 'Unknown'}</p>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                          comment.user.role === 'TEACHER'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {comment.user.role}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-gray-500">
+                          {new Date(comment.createdAt).toLocaleDateString()}
+                        </p>
+                        <button
+                          onClick={() => handleDeleteComment(comment.id)}
+                          className="p-1 hover:bg-red-100 rounded transition"
+                          title="Delete comment"
+                        >
+                          <Trash2 className="w-3 h-3 text-red-600" />
+                        </button>
+                      </div>
                     </div>
                     <p className="text-sm text-gray-700">{comment.content}</p>
                   </div>
@@ -419,19 +502,16 @@ function AssignmentCard({
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex items-center gap-3">
-          {assignment.fileUrl && (
-            <a
-              href={assignment.fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 font-semibold"
-            >
-              <Download className="w-4 h-4" />
-              Download Assignment
-            </a>
-          )}
+          <a
+            href={assignment.fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 font-semibold"
+          >
+            <Download className="w-4 h-4" />
+            Download PDF
+          </a>
           <button
             onClick={() => onDelete(assignment.id)}
             className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition flex items-center gap-2 font-semibold"
@@ -441,26 +521,109 @@ function AssignmentCard({
           </button>
         </div>
       </div>
+
+      {/* Student Profile Modal */}
+      {selectedStudent && (
+        <StudentProfileModal
+          student={selectedStudent}
+          onClose={() => setSelectedStudent(null)}
+        />
+      )}
     </div>
   );
 }
 
-// Create Assignment Modal Component
-function CreateAssignmentModal({
-  onClose,
-  onSuccess,
-}: {
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
+function StudentProfileModal({ student, onClose }: { student: StudentProfile; onClose: () => void }) {
+  const calculateAge = (dob: string | null) => {
+    if (!dob) return null;
+    const today = new Date();
+    const birthDate = new Date(dob);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-hidden shadow-2xl">
+        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-pink-50">
+          <div className="flex items-center justify-between">
+            <h3 className="text-2xl font-bold text-gray-900">Student Profile</h3>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
+              <X className="w-6 h-6 text-gray-400" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-3xl font-bold mb-3">
+              {student.avatar ? (
+                <img src={student.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+              ) : (
+                student.name?.charAt(0).toUpperCase()
+              )}
+            </div>
+            <h4 className="text-xl font-bold text-gray-900">{student.name || 'Unknown'}</h4>
+            <p className="text-sm text-gray-600">{student.email}</p>
+          </div>
+
+          <div className="space-y-4">
+            {student.phone && (
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <Phone className="w-5 h-5 text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-500">Phone</p>
+                  <p className="font-semibold text-gray-900">{student.phone}</p>
+                </div>
+              </div>
+            )}
+
+            {student.location && (
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <MapPin className="w-5 h-5 text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-500">Location</p>
+                  <p className="font-semibold text-gray-900">{student.location}</p>
+                </div>
+              </div>
+            )}
+
+            {student.dateOfBirth && (
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <Cake className="w-5 h-5 text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-500">Age</p>
+                  <p className="font-semibold text-gray-900">
+                    {calculateAge(student.dateOfBirth)} years old
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {student.bio && (
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500 mb-1">Bio</p>
+                <p className="text-sm text-gray-900">{student.bio}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreateAssignmentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     subject: '',
     class: '',
     dueDate: '',
-    dueTime: '23:59',
-    totalMarks: '',
   });
   const [uploadedFile, setUploadedFile] = useState<{ url: string; name: string; size: string } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -505,15 +668,20 @@ function CreateAssignmentModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.title || !formData.description || !formData.subject || !formData.class || !formData.dueDate || !formData.totalMarks) {
+    if (!formData.title || !formData.description || !formData.subject || !formData.class || !formData.dueDate) {
       alert('Please fill in all required fields');
+      return;
+    }
+
+    if (!uploadedFile) {
+      alert('Please upload assignment PDF');
       return;
     }
 
     setCreating(true);
 
     try {
-      const dueDateTime = new Date(`${formData.dueDate}T${formData.dueTime}`);
+      const dueDateTime = new Date(formData.dueDate);
 
       const response = await fetch('/api/teacher/assignments', {
         method: 'POST',
@@ -524,10 +692,9 @@ function CreateAssignmentModal({
           subject: formData.subject,
           class: formData.class,
           dueDate: dueDateTime.toISOString(),
-          totalMarks: parseInt(formData.totalMarks), // ✅ FIXED: Convert to number
-          fileUrl: uploadedFile?.url || null,
-          fileName: uploadedFile?.name || null,
-          fileSize: uploadedFile?.size || null,
+          fileUrl: uploadedFile.url,
+          fileName: uploadedFile.name,
+          fileSize: uploadedFile.size,
         }),
       });
 
@@ -537,11 +704,11 @@ function CreateAssignmentModal({
         alert('Assignment created successfully!');
         onSuccess();
       } else {
-        alert('Failed to create assignment: ' + data.error);
+        alert('Failed: ' + data.error);
       }
     } catch (error) {
-      console.error('Error creating assignment:', error);
-      alert('An error occurred while creating the assignment');
+      console.error('Error:', error);
+      alert('An error occurred');
     } finally {
       setCreating(false);
     }
@@ -561,11 +728,8 @@ function CreateAssignmentModal({
 
         <form onSubmit={handleSubmit}>
           <div className="overflow-y-auto max-h-[calc(90vh-180px)] p-6 space-y-6">
-            {/* Title */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Assignment Title *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Assignment Title *</label>
               <input
                 type="text"
                 value={formData.title}
@@ -576,22 +740,18 @@ function CreateAssignmentModal({
               />
             </div>
 
-            {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
               <textarea
                 rows={4}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Describe the assignment objectives and what students should submit..."
+                placeholder="Describe the assignment..."
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 required
               />
             </div>
 
-            {/* Subject and Class */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Subject *</label>
@@ -617,47 +777,19 @@ function CreateAssignmentModal({
               </div>
             </div>
 
-            {/* Due Date, Time, and Marks */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Due Date *</label>
-                <input
-                  type="date"
-                  value={formData.dueDate}
-                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Due Time *</label>
-                <input
-                  type="time"
-                  value={formData.dueTime}
-                  onChange={(e) => setFormData({ ...formData, dueTime: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Total Marks *</label>
-                <input
-                  type="number"
-                  value={formData.totalMarks}
-                  onChange={(e) => setFormData({ ...formData, totalMarks: e.target.value })}
-                  placeholder="15"
-                  min="1"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  required
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Due Date *</label>
+              <input
+                type="date"
+                value={formData.dueDate}
+                onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                required
+              />
             </div>
 
-            {/* File Upload */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Assignment File (PDF) *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Assignment File (PDF) *</label>
               {uploadedFile ? (
                 <div className="border-2 border-green-300 bg-green-50 rounded-xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -695,7 +827,7 @@ function CreateAssignmentModal({
                     <>
                       <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                       <p className="text-gray-600 mb-1 font-medium">Click to upload assignment PDF</p>
-                      <p className="text-xs text-gray-500">PDF only (Max 16MB)</p>
+                      <p className="text-xs text-gray-500">PDF only (Max 16MB) - REQUIRED</p>
                     </>
                   )}
                 </label>
@@ -708,7 +840,7 @@ function CreateAssignmentModal({
                 <div>
                   <p className="text-sm font-medium text-purple-900 mb-1">Important Note</p>
                   <p className="text-xs text-purple-700">
-                    Students will be able to submit their answers as PDF files and discuss solutions in the comments section to help each other.
+                    Students will submit their answers as PDF files and can discuss solutions in comments.
                   </p>
                 </div>
               </div>
@@ -725,7 +857,7 @@ function CreateAssignmentModal({
             </button>
             <button
               type="submit"
-              disabled={creating || uploading || isUploading}
+              disabled={creating || uploading || isUploading || !uploadedFile}
               className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-lg transition font-semibold disabled:opacity-50 flex items-center gap-2"
             >
               {creating ? (

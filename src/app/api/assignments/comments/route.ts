@@ -56,7 +56,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { assignmentId, content, fileUrl, fileName, fileSize } = body;
 
-    // Validation
     if (!assignmentId || !content) {
       return NextResponse.json({ error: 'Assignment ID and content required' }, { status: 400 });
     }
@@ -102,7 +101,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { commentId, action } = body; // action: 'like' or 'unlike'
+    const { commentId, action } = body;
 
     if (!commentId || !action) {
       return NextResponse.json({ error: 'Comment ID and action required' }, { status: 400 });
@@ -133,7 +132,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// DELETE - Delete comment (own comment only)
+// ✅ DELETE - Delete comment (own comment OR teacher can delete any on their assignments)
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -149,16 +148,35 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Comment ID required' }, { status: 400 });
     }
 
-    // Verify ownership
-    const comment = await prisma.assignmentComment.findFirst({
-      where: {
-        id: commentId,
-        userId: session.user.id,
+    // ✅ Get comment with assignment teacher info
+    const comment = await prisma.assignmentComment.findUnique({
+      where: { id: commentId },
+      include: {
+        assignment: {
+          include: {
+            teacher: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
       },
     });
 
     if (!comment) {
-      return NextResponse.json({ error: 'Comment not found or unauthorized' }, { status: 404 });
+      return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
+    }
+
+    // ✅ Check if user is comment owner OR assignment teacher
+    const isOwner = comment.userId === session.user.id;
+    const isTeacher = comment.assignment.teacher.userId === session.user.id;
+
+    if (!isOwner && !isTeacher) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Only comment owner or teacher can delete' },
+        { status: 403 }
+      );
     }
 
     await prisma.assignmentComment.delete({

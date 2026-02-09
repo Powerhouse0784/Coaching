@@ -6,7 +6,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 const f = createUploadthing();
  
 export const ourFileRouter = {
-  // ✅ NEW: Video uploader (512MB max for large lecture videos)
+  // ✅ Video uploader (512MB max for large lecture videos)
   videoUploader: f({ 
     video: { maxFileSize: "512MB", maxFileCount: 1 } 
   })
@@ -36,7 +36,7 @@ export const ourFileRouter = {
       return { url: file.url };
     }),
 
-    assignmentFile: f({ pdf: { maxFileSize: "16MB", maxFileCount: 1 } })
+  assignmentFile: f({ pdf: { maxFileSize: "16MB", maxFileCount: 1 } })
     .middleware(async () => {
       const session = await getServerSession(authOptions);
       if (!session?.user || session.user.role !== "TEACHER") {
@@ -49,14 +49,21 @@ export const ourFileRouter = {
       return { url: file.url };
     }),
 
-  // Student submission PDF upload
+  // ✅ FIXED: Student submission PDF upload - NOW ALLOWS BOTH STUDENT AND TEACHER
   submissionFile: f({ pdf: { maxFileSize: "16MB", maxFileCount: 1 } })
     .middleware(async () => {
       const session = await getServerSession(authOptions);
-      if (!session?.user || session.user.role !== "STUDENT") {
-        throw new Error("Unauthorized - Students only");
+      
+      if (!session?.user) {
+        throw new Error("Unauthorized - Please sign in");
       }
-      return { userId: session.user.id };
+      
+      // ✅ Allow both STUDENT and TEACHER (for testing)
+      if (session.user.role !== "STUDENT" && session.user.role !== "TEACHER") {
+        throw new Error("Unauthorized - Students and Teachers only");
+      }
+      
+      return { userId: session.user.id, role: session.user.role };
     })
     .onUploadComplete(async ({ metadata, file }) => {
       console.log("Submission uploaded:", file.url);

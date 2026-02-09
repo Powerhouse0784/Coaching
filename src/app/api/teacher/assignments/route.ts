@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 
-// GET - Fetch all assignments created by teacher with stats (OPTIMIZED)
+// GET - Fetch all assignments created by teacher with stats and student profiles
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -12,7 +12,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get teacher record
     const teacher = await prisma.teacher.findUnique({
       where: { userId: session.user.id },
     });
@@ -21,7 +20,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 });
     }
 
-    // ✅ OPTIMIZED: Select only needed fields, use _count for better performance
+    // ✅ Fetch assignments with student profiles
     const assignments = await prisma.assignmentV2.findMany({
       where: { teacherId: teacher.id },
       select: {
@@ -31,7 +30,6 @@ export async function GET(req: NextRequest) {
         subject: true,
         class: true,
         dueDate: true,
-        totalMarks: true,
         fileUrl: true,
         fileName: true,
         fileSize: true,
@@ -50,6 +48,7 @@ export async function GET(req: NextRequest) {
             isCompleted: true,
             fileUrl: true,
             fileName: true,
+            fileSize: true,
             remarks: true,
             submittedAt: true,
             student: {
@@ -57,9 +56,14 @@ export async function GET(req: NextRequest) {
                 id: true,
                 user: {
                   select: {
+                    id: true,
                     name: true,
                     email: true,
                     avatar: true,
+                    phone: true,
+                    location: true,
+                    dateOfBirth: true,
+                    bio: true,
                   },
                 },
               },
@@ -73,9 +77,11 @@ export async function GET(req: NextRequest) {
             createdAt: true,
             user: {
               select: {
+                id: true,
                 name: true,
                 email: true,
                 avatar: true,
+                role: true,
               },
             },
           },
@@ -87,11 +93,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    // ✅ Calculate stats - FIXED: changed completedSubmissions to completed
     const assignmentsWithStats = assignments.map((assignment) => {
-      const totalSubmissions = assignment._count.submissions;
-      const completedCount = assignment.submissions.filter((s) => s.isCompleted).length;
-
       return {
         id: assignment.id,
         title: assignment.title,
@@ -99,15 +101,14 @@ export async function GET(req: NextRequest) {
         subject: assignment.subject,
         class: assignment.class,
         dueDate: assignment.dueDate,
-        totalMarks: assignment.totalMarks,
         fileUrl: assignment.fileUrl,
         fileName: assignment.fileName,
         fileSize: assignment.fileSize,
         isPublished: assignment.isPublished,
         createdAt: assignment.createdAt,
         stats: {
-          totalSubmissions,
-          completed: completedCount, // ✅ FIXED: was completedSubmissions
+          totalSubmissions: assignment._count.submissions,
+          totalComments: assignment._count.comments,
         },
         submissions: assignment.submissions.map(s => ({
           id: s.id,
@@ -115,20 +116,32 @@ export async function GET(req: NextRequest) {
           isCompleted: s.isCompleted,
           fileUrl: s.fileUrl,
           fileName: s.fileName,
+          fileSize: s.fileSize,
           remarks: s.remarks,
           submittedAt: s.submittedAt,
-          studentId: s.student.id,
-          studentName: s.student.user.name,
-          studentEmail: s.student.user.email,
-          studentAvatar: s.student.user.avatar,
+          student: {
+            id: s.student.id,
+            userId: s.student.user.id,
+            name: s.student.user.name,
+            email: s.student.user.email,
+            avatar: s.student.user.avatar,
+            phone: s.student.user.phone,
+            location: s.student.user.location,
+            dateOfBirth: s.student.user.dateOfBirth,
+            bio: s.student.user.bio,
+          },
         })),
         comments: assignment.comments.map(c => ({
           id: c.id,
           content: c.content,
           createdAt: c.createdAt,
-          userName: c.user.name,
-          userEmail: c.user.email,
-          userAvatar: c.user.avatar,
+          user: {
+            id: c.user.id,
+            name: c.user.name,
+            email: c.user.email,
+            avatar: c.user.avatar,
+            role: c.user.role,
+          },
         })),
       };
     });
@@ -143,7 +156,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - Create new assignment
+// POST - Create new assignment (NO MARKS)
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -161,17 +174,17 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, description, subject, class: className, dueDate, totalMarks, fileUrl, fileName, fileSize } = body;
+    const { title, description, subject, class: className, dueDate, fileUrl, fileName, fileSize } = body;
 
-    // Validation
-    if (!title || !description || !subject || !className || !dueDate || !totalMarks) {
+    // ✅ Validation - Removed totalMarks, Added fileUrl required
+    if (!title || !description || !subject || !className || !dueDate || !fileUrl) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields. PDF file is required.' },
         { status: 400 }
       );
     }
 
-    // Create assignment
+    // ✅ Create assignment WITHOUT totalMarks
     const assignment = await prisma.assignmentV2.create({
       data: {
         title,
@@ -179,8 +192,8 @@ export async function POST(req: NextRequest) {
         subject,
         class: className,
         dueDate: new Date(dueDate),
-        totalMarks: parseInt(totalMarks),
-        fileUrl: fileUrl || null,
+        totalMarks: 0, // Set to 0 since we removed marks
+        fileUrl,
         fileName: fileName || null,
         fileSize: fileSize || null,
         teacherId: teacher.id,
@@ -198,7 +211,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH - Mark submission as completed (Teacher marks student's work as done)
+// PATCH - Mark submission as completed
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -222,7 +235,6 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Submission ID required' }, { status: 400 });
     }
 
-    // ✅ Verify the submission belongs to this teacher's assignment
     const submission = await prisma.assignmentSubmission.findFirst({
       where: {
         id: submissionId,
@@ -239,7 +251,6 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // ✅ Update submission
     const updatedSubmission = await prisma.assignmentSubmission.update({
       where: { id: submissionId },
       data: {
@@ -258,7 +269,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// DELETE - Delete assignment
+// DELETE - Delete assignment OR delete comment
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -277,12 +288,42 @@ export async function DELETE(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const assignmentId = searchParams.get('id');
+    const commentId = searchParams.get('commentId');
 
-    if (!assignmentId) {
-      return NextResponse.json({ error: 'Assignment ID required' }, { status: 400 });
+    // ✅ DELETE COMMENT (Teacher can delete any comment on their assignments)
+    if (commentId) {
+      // Verify comment belongs to teacher's assignment
+      const comment = await prisma.assignmentComment.findFirst({
+        where: {
+          id: commentId,
+          assignment: {
+            teacherId: teacher.id,
+          },
+        },
+      });
+
+      if (!comment) {
+        return NextResponse.json(
+          { error: 'Comment not found or unauthorized' },
+          { status: 404 }
+        );
+      }
+
+      await prisma.assignmentComment.delete({
+        where: { id: commentId },
+      });
+
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Comment deleted successfully' 
+      });
     }
 
-    // Verify ownership
+    // ✅ DELETE ASSIGNMENT
+    if (!assignmentId) {
+      return NextResponse.json({ error: 'Assignment ID or Comment ID required' }, { status: 400 });
+    }
+
     const assignment = await prisma.assignmentV2.findFirst({
       where: {
         id: assignmentId,
@@ -297,16 +338,15 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // Delete assignment (cascade will delete submissions and comments)
     await prisma.assignmentV2.delete({
       where: { id: assignmentId },
     });
 
     return NextResponse.json({ success: true, message: 'Assignment deleted successfully' });
   } catch (error: any) {
-    console.error('Error deleting assignment:', error);
+    console.error('Error deleting:', error);
     return NextResponse.json(
-      { error: 'Failed to delete assignment', details: error.message },
+      { error: 'Failed to delete', details: error.message },
       { status: 500 }
     );
   }
