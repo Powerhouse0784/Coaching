@@ -125,6 +125,38 @@ doubtPdf: f({ pdf: { maxFileSize: "8MB", maxFileCount: 1 } })
     return { url: file.url };
   }),
 
+
+  // Notes file upload (PDF, images, docs)
+notesFile: f({ 
+  pdf: { maxFileSize: "32MB", maxFileCount: 1 },
+  image: { maxFileSize: "8MB", maxFileCount: 1 },
+})
+  .middleware(async () => {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== "TEACHER") {
+      throw new Error("Unauthorized - Teachers only");
+    }
+    return { userId: session.user.id };
+  })
+  .onUploadComplete(async ({ metadata, file }) => {
+    console.log("Notes file uploaded:", file.url);
+    return { url: file.url };
+  }),
+
+// Notes thumbnail upload
+notesThumbnail: f({ image: { maxFileSize: "4MB", maxFileCount: 1 } })
+  .middleware(async () => {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== "TEACHER") {
+      throw new Error("Unauthorized - Teachers only");
+    }
+    return { userId: session.user.id };
+  })
+  .onUploadComplete(async ({ metadata, file }) => {
+    console.log("Notes thumbnail uploaded:", file.url);
+    return { url: file.url };
+  }),
+  
   // Profile avatar uploader
   profileAvatar: f({ image: { maxFileSize: "2MB", maxFileCount: 1 } })
     .middleware(async ({ req }) => {

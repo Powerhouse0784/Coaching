@@ -629,6 +629,17 @@ function CreateAssignmentModal({ onClose, onSuccess }: { onClose: () => void; on
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  // ✅ Get today's date in YYYY-MM-DD format for min date
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const minDate = getTodayDate();
+
   const { startUpload, isUploading } = useUploadThing('assignmentFile', {
     onClientUploadComplete: (res) => {
       if (res && res[0]) {
@@ -678,10 +689,23 @@ function CreateAssignmentModal({ onClose, onSuccess }: { onClose: () => void; on
       return;
     }
 
+    // ✅ Validate that due date is not in the past
+    const selectedDate = new Date(formData.dueDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to compare only dates
+    selectedDate.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+      alert('Due date cannot be in the past. Please select today or a future date.');
+      return;
+    }
+
     setCreating(true);
 
     try {
       const dueDateTime = new Date(formData.dueDate);
+      // Set time to end of day (23:59:59)
+      dueDateTime.setHours(23, 59, 59, 999);
 
       const response = await fetch('/api/teacher/assignments', {
         method: 'POST',
@@ -783,9 +807,11 @@ function CreateAssignmentModal({ onClose, onSuccess }: { onClose: () => void; on
                 type="date"
                 value={formData.dueDate}
                 onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                min={minDate}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">Due date must be today or in the future</p>
             </div>
 
             <div>

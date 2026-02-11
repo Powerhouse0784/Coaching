@@ -100,7 +100,8 @@ model Student {
   enrollments Enrollment[]
 
   doubts Doubt[] @relation("StudentDoubts")
-  
+  noteBookmarks NoteBookmark[] @relation("StudentNoteBookmarks")
+
   // New Assignment System
   assignmentSubmissions AssignmentSubmission[] @relation("StudentAssignmentSubmissions")
 
@@ -119,7 +120,7 @@ model Teacher {
 
   // New Assignment System
   assignmentsV2 AssignmentV2[] @relation("TeacherAssignments")
-
+  notes Note[] @relation("TeacherNotes")
   @@map("teachers")
 }
 
@@ -529,4 +530,61 @@ model DoubtReplyUpvote {
 
   @@unique([replyId, userId])
   @@map("doubt_reply_upvotes")
+}
+
+// ========== NOTES SYSTEM ==========
+model Note {
+  id          String   @id @default(uuid())
+  title       String
+  description String?  @db.Text
+  subject     String
+  class       String
+  topic       String?
+  chapter     String?
+  
+  // File details
+  fileUrl     String
+  fileName    String
+  fileType    String   // pdf, image, doc
+  fileSize    String
+  thumbnailUrl String?
+  
+  // Status
+  isPublished Boolean  @default(true)
+  isPinned    Boolean  @default(false)
+  
+  // Stats
+  downloads   Int      @default(0)
+  views       Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  teacherId   String
+  teacher     Teacher  @relation("TeacherNotes", fields: [teacherId], references: [id], onDelete: Cascade)
+  
+  bookmarks   NoteBookmark[]
+
+  @@map("notes")
+  @@index([teacherId])
+  @@index([subject])
+  @@index([class])
+  @@index([isPublished])
+  @@index([isPinned])
+  @@index([createdAt])
+}
+
+model NoteBookmark {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  noteId    String
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  
+  studentId String
+  student   Student  @relation("StudentNoteBookmarks", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, studentId])
+  @@map("note_bookmarks")
 }

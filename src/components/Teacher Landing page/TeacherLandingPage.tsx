@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 // Import feature components
-import LiveClassManager from '@/components/teacher-features/LiveClassManager';
+import NotesManager from '@/components/teacher/NotesManager';
 import AssignmentManager from '@/components/teacher-features/AssignmentManager';
 import StudentDashboard from '@/components/teacher-features/StudentDashboard';
 import TestManager from '@/components/teacher-features/TestManager';
@@ -143,15 +143,15 @@ export default function TeacherDashboard() {
 
   const platformFeatures = [
     {
-      id: 'go-live',
-      icon: Video,
-      title: 'Live Classes',
-      description: 'Start HD video sessions with screen sharing and interactive tools',
-      color: 'from-red-500 to-pink-500',
-      stats: 'Start Now',
-      tag: 'Live',
-      component: <LiveClassManager />,
-    },
+  id: 'notes',
+  icon: BookOpen,
+  title: 'Study Notes',
+  description: 'Upload and manage study materials and notes for your students',
+  color: 'from-blue-500 to-cyan-500',
+  stats: '45 Notes',
+  tag: 'Popular',
+  component: <NotesManager />,
+  },
     {
       id: 'assignments',
       icon: FileText,
@@ -628,17 +628,17 @@ export default function TeacherDashboard() {
             </h1>
             
             <p className="text-base sm:text-lg lg:text-xl text-purple-100 mb-6 sm:mb-8 leading-relaxed max-w-2xl mx-auto">
-              You have <span className="font-bold text-white">5 classes</span> scheduled today and{' '}
+              You have <span className="font-bold text-white">45 notes</span> uploaded and{' '}
               <span className="font-bold text-white">23 new questions</span> to answer. Keep inspiring minds!
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-10 justify-center">
               <button 
-                onClick={() => openFeature('go-live')}
+                onClick={() => openFeature('notes')}
                 className="group bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all flex items-center justify-center gap-2"
               >
-                <Video className="w-4 h-4 sm:w-5 sm:h-5" />
-                Start Live Class
+                <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
+                Manage Notes
                 <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
               </button>
               <button 

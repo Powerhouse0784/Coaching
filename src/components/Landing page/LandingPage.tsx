@@ -11,12 +11,12 @@ import {
   Calendar, FileText, UserCheck, Globe, Headphones, Lock,
   ArrowLeft, Home, LogOut, User as UserIcon, Eye, EyeOff, 
   Mail, Chrome, AlertCircle, CheckCircle2, Settings, Edit,
-  Moon, Sun
+  Moon, Sun, BookOpen
 } from 'lucide-react';
 
 // Import your components
 import StudentAssignmentDashboard from "@/components/assignments/AssignmentCard";
-import LiveClasses from "@/components/live class/LiveClass";
+import NotesLibrary from "@/components/student/NotesLibrary";
 import PaymentDemo from "@/components/payment/PaymentCheck";
 import StudyPlanner from "@/components/study planner/Study";
 import TeacherInterface from "@/components/teacher/TeacherInterface";
@@ -695,15 +695,15 @@ const ProtectedLanding = () => {
 
   const platformFeatures = [
     {
-      id: 'live-classes',
-      icon: Video,
-      title: 'Live Interactive Classes',
-      description: 'Join HD video sessions with real-time screen sharing, polls, and interactive whiteboard',
-      color: 'from-blue-500 to-cyan-500',
-      stats: '500+ Daily Sessions',
-      tag: 'Most Popular',
-      component: <LiveClasses />
-    },
+  id: 'notes',
+  icon: BookOpen,
+  title: 'Study Notes Library',
+  description: 'Access comprehensive study materials and notes shared by expert teachers',
+  color: 'from-blue-500 to-cyan-500',
+  stats: '1000+ Notes Available',
+  tag: 'Most Popular',
+  component: <NotesLibrary />
+},
     {
   id: 'assignments',
   icon: FileText,
@@ -1632,7 +1632,7 @@ const ProtectedLanding = () => {
               <div>
                 <h4 className="font-bold text-base sm:text-lg mb-4">Platform</h4>
                 <ul className="space-y-3 text-gray-400 text-sm sm:text-base">
-                  <li><button onClick={() => openFeature('live-classes')} className="hover:text-white transition-colors">Live Classes</button></li>
+                  <li><button onClick={() => openFeature('notes')} className="hover:text-white transition-colors">Study Notes</button></li>
                   <li><button onClick={() => openFeature('assignments')} className="hover:text-white transition-colors">Assignments</button></li>
                   <li><button onClick={() => openFeature('study-planner')} className="hover:text-white transition-colors">AI Study Planner</button></li>
                   <li><button onClick={() => openFeature('quizzes')} className="hover:text-white transition-colors">Mock Tests</button></li>
