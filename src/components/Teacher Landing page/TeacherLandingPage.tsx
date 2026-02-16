@@ -13,19 +13,19 @@ import {
   TrendingDown, Eye, BookCheck, Flame, ArrowRight, Trophy,
   Moon, Sun, Edit, Camera, Save, Mail, Phone, MapPin,
   Briefcase, Link as LinkIcon, Calendar as CalendarIcon,
-  Github, Linkedin, Twitter, Globe
+  Github, Linkedin, Twitter, Globe, Brain
 } from 'lucide-react';
+
 
 // Import feature components
 import NotesManager from '@/components/teacher/NotesManager';
 import AssignmentManager from '@/components/teacher-features/AssignmentManager';
 import StudentDashboard from '@/components/teacher-features/StudentDashboard';
-import TestManager from '@/components/teacher-features/TestManager';
+import AIAssistant from '@/components/teacher/AIAssistant';
 import VideoLibraryManager from '@/components/teacher-features/VideoLibraryManager';
 import DoubtManager from '@/components/teacher-features/DoubtManager';
-import AnalyticsDashboard from '@/components/teacher-features/AnalyticsDashboard';
+import TeacherChat from '@/components/teacher/TeacherChat';
 import ScheduleManager from '@/components/teacher-features/ScheduleManager';
-import CourseManager from '@/components/teacher-features/CourseManager';
 
 // Import custom components
 import EditProfileModal from '../../components/modals/EditProfileModal/Editprofilemodal';
@@ -173,14 +173,14 @@ export default function TeacherDashboard() {
       component: <StudentDashboard />,
     },
     {
-      id: 'tests',
-      icon: Target,
-      title: 'Tests & Quizzes',
-      description: 'Create practice tests with auto-grading and analytics',
-      color: 'from-orange-500 to-amber-500',
-      stats: '8 Active',
+      id: 'ai-assistant',
+      icon: Brain,
+      title: 'AI Assistant',
+      description: 'Get instant help with lesson plans, content creation, and teaching strategies',
+      color: 'from-indigo-500 to-purple-500',
+      stats: '24/7 Available',
       tag: 'AI Powered',
-      component: <TestManager />,
+      component: <AIAssistant />,
     },
     {
       id: 'library',
@@ -203,14 +203,14 @@ export default function TeacherDashboard() {
       component: <DoubtManager />,
     },
     {
-      id: 'analytics',
-      icon: BarChart3,
-      title: 'Analytics',
-      description: 'Track performance with detailed insights and reports',
+      id: 'chat',
+      icon: MessageSquare,
+      title: 'Teacher Chat',
+      description: 'Connect and collaborate with fellow teachers',
       color: 'from-indigo-500 to-blue-500',
-      stats: 'View Stats',
-      tag: 'Insights',
-      component: <AnalyticsDashboard />,
+      stats: 'Live Chat',
+      tag: 'New',
+      component: <TeacherChat />,
     },
     {
       id: 'schedule',

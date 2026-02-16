@@ -60,7 +60,7 @@ model User {
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-
+  chatMessages TeacherChatMessage[] @relation("UserChatMessages")
   phone         String?
   bio           String?
   location      String?
@@ -587,4 +587,31 @@ model NoteBookmark {
 
   @@unique([noteId, studentId])
   @@map("note_bookmarks")
+}
+
+// ========== TEACHER CHAT SYSTEM ==========
+model TeacherChatMessage {
+  id        String   @id @default(uuid())
+  content   String   @db.Text
+  
+  // File attachments
+  fileUrl   String?
+  fileName  String?
+  fileType  String?  // image, pdf, document
+  fileSize  String?
+  
+  // Message metadata
+  isRead    Boolean  @default(false)
+  readBy    String[] @default([])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  senderId  String
+  sender    User     @relation("UserChatMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("teacher_chat_messages")
+  @@index([senderId])
+  @@index([createdAt])
 }

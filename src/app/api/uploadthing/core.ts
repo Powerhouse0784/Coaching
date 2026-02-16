@@ -157,6 +157,36 @@ notesThumbnail: f({ image: { maxFileSize: "4MB", maxFileCount: 1 } })
     return { url: file.url };
   }),
   
+  // Chat image upload
+chatImage: f({ image: { maxFileSize: "8MB", maxFileCount: 1 } })
+  .middleware(async () => {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== "TEACHER") {
+      throw new Error("Unauthorized - Teachers only");
+    }
+    return { userId: session.user.id };
+  })
+  .onUploadComplete(async ({ metadata, file }) => {
+    console.log("Chat image uploaded:", file.url);
+    return { url: file.url };
+  }),
+
+// Chat document upload
+chatDocument: f({ 
+  pdf: { maxFileSize: "16MB", maxFileCount: 1 },
+})
+  .middleware(async () => {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== "TEACHER") {
+      throw new Error("Unauthorized - Teachers only");
+    }
+    return { userId: session.user.id };
+  })
+  .onUploadComplete(async ({ metadata, file }) => {
+    console.log("Chat document uploaded:", file.url);
+    return { url: file.url };
+  }),
+  
   // Profile avatar uploader
   profileAvatar: f({ image: { maxFileSize: "2MB", maxFileCount: 1 } })
     .middleware(async ({ req }) => {
