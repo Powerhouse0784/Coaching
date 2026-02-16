@@ -61,6 +61,7 @@ model User {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   chatMessages TeacherChatMessage[] @relation("UserChatMessages")
+  iMessages   AIAssistantMessage[] @relation("UserAIMessages")     // AI Assistant (NEW!)
   phone         String?
   bio           String?
   location      String?
@@ -614,4 +615,30 @@ model TeacherChatMessage {
   @@map("teacher_chat_messages")
   @@index([senderId])
   @@index([createdAt])
+}
+
+model AIAssistantMessage {
+  id        String   @id @default(uuid())
+  content   String   @db.Text
+  
+  // File attachments
+  fileUrl   String?
+  fileName  String?
+  fileType  String?  // image, pdf
+  fileSize  String?
+  
+  // Message type
+  isAI      Boolean  @default(false)  // true = AI response, false = user message
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  teacherId String
+  teacher   User     @relation("UserAIMessages", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@map("ai_assistant_messages")
+  @@index([teacherId])
+  @@index([createdAt])
+  @@index([isAI])
 }

@@ -17,22 +17,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const messages = await prisma.teacherChatMessage.findMany({
-      where: { senderId: session.user.id },
-      include: {
-        sender: {
-          select: {
-            name: true,
-            avatar: true,
-          },
-        },
-      },
+    // ✅ FIXED: Now using AIAssistantMessage table (separate from chat)
+    const messages = await prisma.aIAssistantMessage.findMany({
+      where: { teacherId: session.user.id },
       orderBy: { createdAt: 'asc' },
     });
 
     return NextResponse.json({ success: true, messages });
   } catch (error: any) {
-    console.error('Error fetching messages:', error);
+    console.error('Error fetching AI messages:', error);
     return NextResponse.json(
       { error: 'Failed to fetch messages', details: error.message },
       { status: 500 }
@@ -59,25 +52,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Save user message to database
-    const userMessage = await prisma.teacherChatMessage.create({
+    // ✅ FIXED: Save user message to AI Assistant table (not chat table)
+    const userMessage = await prisma.aIAssistantMessage.create({
       data: {
         content: content || 'Uploaded a file',
         fileUrl: fileUrl || null,
         fileName: fileName || null,
         fileType: fileType || null,
         fileSize: fileSize || null,
-        senderId: session.user.id,
-        isRead: true,
-        readBy: [session.user.id],
-      },
-      include: {
-        sender: {
-          select: {
-            name: true,
-            avatar: true,
-          },
-        },
+        isAI: false,  // User message
+        teacherId: session.user.id,
       },
     });
 
@@ -150,7 +134,7 @@ Always maintain a supportive, encouraging tone that empowers teachers to be thei
         },
         ...groqMessages,
       ],
-      model: 'llama-3.3-70b-versatile', // Fast and high-quality
+      model: 'llama-3.3-70b-versatile',
       temperature: 0.7,
       max_tokens: 2048,
       top_p: 1,
@@ -159,21 +143,12 @@ Always maintain a supportive, encouraging tone that empowers teachers to be thei
 
     const aiResponseText = completion.choices[0]?.message?.content || 'I apologize, but I could not generate a response. Please try again.';
 
-    // Save AI response to database
-    const aiMessage = await prisma.teacherChatMessage.create({
+    // ✅ FIXED: Save AI response to AI Assistant table (not chat table)
+    const aiMessage = await prisma.aIAssistantMessage.create({
       data: {
         content: aiResponseText,
-        senderId: session.user.id,
-        isRead: true,
-        readBy: [session.user.id],
-      },
-      include: {
-        sender: {
-          select: {
-            name: true,
-            avatar: true,
-          },
-        },
+        isAI: true,  // AI message
+        teacherId: session.user.id,
       },
     });
 
@@ -191,7 +166,7 @@ Always maintain a supportive, encouraging tone that empowers teachers to be thei
   }
 }
 
-// DELETE - Clear chat history
+// DELETE - Clear AI chat history
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -200,13 +175,14 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await prisma.teacherChatMessage.deleteMany({
-      where: { senderId: session.user.id },
+    // ✅ FIXED: Delete only AI Assistant messages (not chat messages)
+    await prisma.aIAssistantMessage.deleteMany({
+      where: { teacherId: session.user.id },
     });
 
-    return NextResponse.json({ success: true, message: 'Chat history cleared' });
+    return NextResponse.json({ success: true, message: 'AI chat history cleared' });
   } catch (error: any) {
-    console.error('Error clearing messages:', error);
+    console.error('Error clearing AI messages:', error);
     return NextResponse.json(
       { error: 'Failed to clear messages', details: error.message },
       { status: 500 }
