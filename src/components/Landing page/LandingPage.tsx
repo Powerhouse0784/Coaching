@@ -38,7 +38,6 @@ interface FormData {
 
 
 const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void }> = ({ onSwitchToRegister, onBack }) => {
-  const router = useRouter();
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [role, setRole] = useState<'STUDENT' | 'TEACHER'>('STUDENT');
@@ -47,45 +46,42 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
   const [error, setError] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
+    e.preventDefault();
+    setLoading(true);
+    setError('');
 
-  try {
-    const result = await signIn('credentials', {
-      email,
-      password,
-      role,
-      redirect: false,
-    });
+    try {
+      const result = await signIn('credentials', {
+        email,
+        password,
+        role,
+        redirect: false,
+      });
 
-    if (result?.error) {
-      if (result.error.includes('registered as')) {
-        setError(result.error);
-      } else if (result.error === 'Invalid credentials') {
-        setError('User not found or invalid password. Please check your credentials.');
-      } else if (result.error === 'Account is deactivated') {
-        setError('Your account has been deactivated. Please contact support.');
-      } else {
-        setError(result.error);
+      if (result?.error) {
+        if (result.error.includes('registered as')) {
+          setError(result.error);
+        } else if (result.error === 'Invalid credentials') {
+          setError('User not found or invalid password. Please check your credentials.');
+        } else if (result.error === 'Account is deactivated') {
+          setError('Your account has been deactivated. Please contact support.');
+        } else {
+          setError(result.error);
+        }
+      } else if (result?.ok) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (role === 'TEACHER') {
+          window.location.href = '/teacher';
+        } else {
+          window.location.href = '/student';
+        }
       }
-    } else if (result?.ok) {
-      // ✅ IMPORTANT: Wait for session to be ready before redirecting
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // ✅ Use window.location instead of router.push for hard refresh
-      if (role === 'TEACHER') {
-        window.location.href = '/teacher';
-      } else {
-        window.location.href = '/student';
-      }
+    } catch (err: any) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  } catch (err: any) {
-    setError('Something went wrong. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleGoogleSignIn = async () => {
     await signIn('google', { callbackUrl: '/' });
@@ -109,7 +105,7 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-              <span className="text-2xl font-bold text-white">EE</span>
+              <Rocket className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Welcome Back</h1>
             <p className="text-gray-600 mt-2">Sign in to continue learning</p>
@@ -141,7 +137,6 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Role Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">I am a:</label>
               <div className="grid grid-cols-2 gap-3">
@@ -172,7 +167,6 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
               </div>
             </div>
 
-            {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
               <div className="relative">
@@ -188,7 +182,6 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
               </div>
             </div>
 
-            {/* Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
               <div className="relative">
@@ -242,12 +235,7 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
   );
 };
 
-// Register Component with Role Selection
-// Updated Register Component with Teacher Code Verification
-// Add this to replace your RegisterPage component
-
 const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void }> = ({ onSwitchToLogin, onBack }) => {
-  const router = useRouter();
   const [formData, setFormData] = useState<FormData>({
     name: '',
     email: '',
@@ -255,14 +243,14 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
     confirmPassword: '',
   });
   const [role, setRole] = useState<'STUDENT' | 'TEACHER'>('STUDENT');
-  const [teacherCode, setTeacherCode] = useState<string>(''); // ✅ NEW: Teacher code state
+  const [teacherCode, setTeacherCode] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
   const [agreedToTerms, setAgreedToTerms] = useState<boolean>(false);
 
-  const TEACHER_REGISTRATION_CODE = 'P8YGJCVR2'; // ✅ Teacher code constant
+  const TEACHER_REGISTRATION_CODE = 'P8YGJCVR2';
 
   const handleChange = (field: keyof FormData, value: string): void => {
     setFormData({ ...formData, [field]: value });
@@ -274,7 +262,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
     setError('');
     setSuccess('');
 
-    // Validation
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match!');
       return;
@@ -290,7 +277,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
       return;
     }
 
-    // ✅ NEW: Validate teacher code if role is TEACHER
     if (role === 'TEACHER') {
       if (!teacherCode.trim()) {
         setError('Please enter the teacher registration code');
@@ -305,7 +291,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
     setLoading(true);
 
     try {
-      // Register the user
       const registerResponse = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -325,7 +310,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
 
       setSuccess(`${role === 'STUDENT' ? 'Student' : 'Teacher'} account created successfully! Logging you in...`);
 
-      // Auto-login after registration
       setTimeout(async () => {
         try {
           const result = await signIn('credentials', {
@@ -339,10 +323,7 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
             setError('Registration successful but auto-login failed. Please login manually.');
             setTimeout(() => onSwitchToLogin(), 2000);
           } else if (result?.ok) {
-            // Wait for session
             await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Hard redirect
             if (role === 'TEACHER') {
               window.location.href = '/teacher';
             } else {
@@ -387,7 +368,7 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-600 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-              <span className="text-2xl font-bold text-white">EE</span>
+              <Rocket className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Create Account</h1>
             <p className="text-gray-600 mt-2">Start your journey today</p>
@@ -426,7 +407,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Role Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">I want to register as:</label>
               <div className="grid grid-cols-2 gap-3">
@@ -434,7 +414,7 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
                   type="button"
                   onClick={() => {
                     setRole('STUDENT');
-                    setTeacherCode(''); // Clear teacher code when switching to student
+                    setTeacherCode('');
                     setError('');
                   }}
                   className={`p-4 rounded-xl border-2 transition-all ${
@@ -466,7 +446,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
               </div>
             </div>
 
-            {/* ✅ NEW: Teacher Code Input (Only shown when TEACHER is selected) */}
             {role === 'TEACHER' && (
               <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
                 <label className="block text-sm font-medium text-purple-900 mb-2 flex items-center gap-2">
@@ -492,7 +471,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
               </div>
             )}
 
-            {/* Full Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
               <div className="relative">
@@ -508,7 +486,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
               </div>
             </div>
 
-            {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
               <div className="relative">
@@ -524,7 +501,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
               </div>
             </div>
 
-            {/* Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
               <div className="relative">
@@ -548,7 +524,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
               </div>
             </div>
 
-            {/* Confirm Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
               <div className="relative">
@@ -564,7 +539,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
               </div>
             </div>
 
-            {/* Terms */}
             <label className="flex items-start gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -630,7 +604,6 @@ const ProtectedLanding = () => {
     window.scrollTo(0, 0);
   }, [currentScreen, authScreen]);
 
-  // Load dark mode preference
   useEffect(() => {
     const savedDarkMode = localStorage.getItem('darkMode') === 'true';
     setDarkMode(savedDarkMode);
@@ -639,7 +612,6 @@ const ProtectedLanding = () => {
     }
   }, []);
 
-  // Fetch user profile
   useEffect(() => {
     const fetchProfile = async () => {
       if (session?.user?.id) {
@@ -695,25 +667,25 @@ const ProtectedLanding = () => {
 
   const platformFeatures = [
     {
-  id: 'notes',
-  icon: BookOpen,
-  title: 'Study Notes Library',
-  description: 'Access comprehensive study materials and notes shared by expert teachers',
-  color: 'from-blue-500 to-cyan-500',
-  stats: '1000+ Notes Available',
-  tag: 'Most Popular',
-  component: <NotesLibrary />
-},
+      id: 'notes',
+      icon: BookOpen,
+      title: 'Study Notes Library',
+      description: 'Access comprehensive study materials and notes shared by expert teachers',
+      color: 'from-blue-500 to-cyan-500',
+      stats: '1000+ Notes Available',
+      tag: 'Most Popular',
+      component: <NotesLibrary />
+    },
     {
-  id: 'assignments',
-  icon: FileText,
-  title: 'Smart Assignments',
-  description: 'AI-powered assignment system with automatic grading and detailed feedback',
-  color: 'from-purple-500 to-pink-500',
-  stats: '10K+ Completed',
-  tag: 'Top Rated',
-  component: <StudentAssignmentDashboard />
-},
+      id: 'assignments',
+      icon: FileText,
+      title: 'Smart Assignments',
+      description: 'AI-powered assignment system with automatic grading and detailed feedback',
+      color: 'from-purple-500 to-pink-500',
+      stats: '10K+ Completed',
+      tag: 'Top Rated',
+      component: <StudentAssignmentDashboard />
+    },
     {
       id: 'study-planner',
       icon: Brain,
@@ -833,7 +805,6 @@ const ProtectedLanding = () => {
 
   const currentFeature = platformFeatures.find(f => f.id === currentScreen);
 
-  // Show auth screens
   if (authScreen === 'login') {
     return <LoginPage onSwitchToRegister={() => setAuthScreen('register')} onBack={handleBackToHome} />;
   }
@@ -846,7 +817,6 @@ const ProtectedLanding = () => {
   if (currentScreen !== 'home' && currentFeature && session) {
     return (
       <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
-        {/* Feature Navigation */}
         <nav className={`sticky top-0 z-50 ${darkMode ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-lg shadow-lg`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between">
@@ -871,9 +841,10 @@ const ProtectedLanding = () => {
               </div>
 
               <div className="flex items-center gap-3">
+                {/* FIX: Dark mode toggle uses bg-gray-100 when in light mode so it's always visible */}
                 <button 
                   onClick={toggleDarkMode}
-                  className={`p-2 rounded-xl ${darkMode ? 'bg-gray-700 text-yellow-400' : 'bg-gray-100 text-gray-700'} hover:scale-110 transition-all`}
+                  className={`p-2 rounded-xl ${darkMode ? 'bg-gray-700 text-yellow-400' : 'bg-gray-100 text-gray-600'} hover:scale-110 transition-all`}
                   title={darkMode ? 'Light Mode' : 'Dark Mode'}
                 >
                   {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -883,7 +854,7 @@ const ProtectedLanding = () => {
                   <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
                     <Rocket className="w-5 h-5 text-white" />
                   </div>
-                  <span className={`hidden md:inline text-xl font-bold ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>EduElite</span>
+                  <span className={`hidden md:inline text-xl font-bold ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>Intense Learners</span>
                 </button>
                 
                 <div className="relative">
@@ -939,7 +910,6 @@ const ProtectedLanding = () => {
 
                       <div className={`my-1 ${darkMode ? 'border-gray-700' : 'border-gray-200'} border-t`}></div>
 
-                      {/* Teacher View - Only for Teachers */}
                       {session?.user?.role === 'TEACHER' && (
                         <button
                           onClick={() => { switchToTeacherView(); setShowUserMenu(false); }}
@@ -1004,7 +974,6 @@ const ProtectedLanding = () => {
           </div>
         </div>
 
-        {/* Modals */}
         {showEditProfile && (
           <EditProfileModal
             isOpen={showEditProfile}
@@ -1027,8 +996,8 @@ const ProtectedLanding = () => {
     );
   }
 
-    // Home/Landing Screen - COMPLETE VERSION
-    return (
+  // Home/Landing Screen
+  return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
       {/* Navigation Bar */}
       <nav className={`fixed w-full z-50 transition-all duration-300 ${
@@ -1038,34 +1007,44 @@ const ProtectedLanding = () => {
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            {/* Logo — FIX: "Intense Learners" + "learn with intensity" tagline */}
+            <div className="flex items-center gap-3 flex-shrink-0">
               <div className="w-10 h-10 sm:w-11 sm:h-11 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
                 <Rocket className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div>
-                <span className={`text-xl sm:text-2xl font-bold ${scrolled ? (darkMode ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`}>
-                  EduElite
+                <span className={`text-lg sm:text-2xl font-bold ${scrolled ? (darkMode ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`}>
+                  Intense Learners
                 </span>
                 <div className={`text-xs ${scrolled ? (darkMode ? 'text-gray-400' : 'text-gray-600') : 'text-purple-200'} hidden sm:block`}>
-                  AI-Powered Learning
+                  Learn with intensity
                 </div>
               </div>
             </div>
 
+            {/* Desktop Nav */}
             <div className="hidden lg:flex items-center gap-8">
               <a href="#platform" className={`font-medium transition-colors ${
                 scrolled ? (darkMode ? 'text-gray-300 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600') : 'text-white/90 hover:text-white'
               }`}>Features</a>
-              <a href="#how-it-works" className={`font-medium transition-colors ${
-                scrolled ? (darkMode ? 'text-gray-300 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600') : 'text-white/90 hover:text-white'
-              }`}>How It Works</a>
+              {/* FIX: Only show How It Works to non-logged-in users */}
+              {!session && (
+                <a href="#how-it-works" className={`font-medium transition-colors ${
+                  scrolled ? (darkMode ? 'text-gray-300 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600') : 'text-white/90 hover:text-white'
+                }`}>How It Works</a>
+              )}
               <a href="#testimonials" className={`font-medium transition-colors ${
                 scrolled ? (darkMode ? 'text-gray-300 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600') : 'text-white/90 hover:text-white'
               }`}>Success Stories</a>
               
+              {/* FIX: Dark mode button always visible — uses solid bg when scrolled (white navbar), uses white/15 when hero */}
               <button 
                 onClick={toggleDarkMode}
-                className={`p-2 rounded-xl ${darkMode ? 'bg-gray-700 text-yellow-400' : 'bg-white/10 text-white'} hover:scale-110 transition-all`}
+                className={`p-2 rounded-xl hover:scale-110 transition-all ${
+                  scrolled
+                    ? darkMode ? 'bg-gray-700 text-yellow-400' : 'bg-gray-100 text-gray-600'
+                    : 'bg-white/15 text-white hover:bg-white/25'
+                }`}
                 title={darkMode ? 'Light Mode' : 'Dark Mode'}
               >
                 {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -1125,7 +1104,6 @@ const ProtectedLanding = () => {
 
                       <div className={`my-1 ${darkMode ? 'border-gray-700' : 'border-gray-200'} border-t`}></div>
 
-                      {/* Teacher View - Only for Teachers */}
                       {session?.user?.role === 'TEACHER' && (
                         <button
                           onClick={() => { switchToTeacherView(); setShowUserMenu(false); }}
@@ -1156,23 +1134,41 @@ const ProtectedLanding = () => {
               )}
             </div>
 
-            <button 
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-100/10 transition-colors"
-            >
-              {mobileMenuOpen ? (
-                <X className={`w-6 h-6 ${scrolled ? (darkMode ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`} />
-              ) : (
-                <Menu className={`w-6 h-6 ${scrolled ? (darkMode ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`} />
-              )}
-            </button>
+            {/* Mobile right side: dark toggle + hamburger */}
+            <div className="flex lg:hidden items-center gap-2">
+              {/* FIX: Dark mode button always visible on mobile */}
+              <button 
+                onClick={toggleDarkMode}
+                className={`p-2 rounded-lg transition-all ${
+                  scrolled
+                    ? darkMode ? 'bg-gray-700 text-yellow-400' : 'bg-gray-100 text-gray-600'
+                    : 'bg-white/15 text-white hover:bg-white/25'
+                }`}
+              >
+                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+
+              <button 
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="p-2 rounded-lg hover:bg-gray-100/10 transition-colors"
+              >
+                {mobileMenuOpen ? (
+                  <X className={`w-6 h-6 ${scrolled ? (darkMode ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`} />
+                ) : (
+                  <Menu className={`w-6 h-6 ${scrolled ? (darkMode ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`} />
+                )}
+              </button>
+            </div>
           </div>
 
           {mobileMenuOpen && (
             <div className={`lg:hidden mt-4 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-2xl shadow-2xl p-6 border`}>
               <div className="flex flex-col gap-4">
                 <a href="#platform" className={`${darkMode ? 'text-gray-200 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'} font-medium py-2`} onClick={() => setMobileMenuOpen(false)}>Features</a>
-                <a href="#how-it-works" className={`${darkMode ? 'text-gray-200 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'} font-medium py-2`} onClick={() => setMobileMenuOpen(false)}>How It Works</a>
+                {/* FIX: Only show How It Works to non-logged-in users in mobile menu too */}
+                {!session && (
+                  <a href="#how-it-works" className={`${darkMode ? 'text-gray-200 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'} font-medium py-2`} onClick={() => setMobileMenuOpen(false)}>How It Works</a>
+                )}
                 <a href="#testimonials" className={`${darkMode ? 'text-gray-200 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'} font-medium py-2`} onClick={() => setMobileMenuOpen(false)}>Success Stories</a>
                 
                 {session ? (
@@ -1217,7 +1213,6 @@ const ProtectedLanding = () => {
                       {darkMode ? 'Light Mode' : 'Dark Mode'}
                     </button>
 
-                    {/* Teacher View - Only for Teachers */}
                     {session?.user?.role === 'TEACHER' && (
                       <button
                         onClick={() => { switchToTeacherView(); setMobileMenuOpen(false); }}
@@ -1250,7 +1245,7 @@ const ProtectedLanding = () => {
         </div>
       </nav>
 
-         {/* Modals */}
+      {/* Modals */}
       {showEditProfile && (
         <EditProfileModal
           isOpen={showEditProfile}
@@ -1270,201 +1265,203 @@ const ProtectedLanding = () => {
         />
       )}
 
-        {/* Hero Section */}
-        <div className="relative bg-gradient-to-br from-indigo-950 via-purple-900 to-pink-900 overflow-hidden pt-24 pb-16 sm:pt-28 sm:pb-20 lg:pt-32 lg:pb-32">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-30" />
-          <div className="absolute top-20 left-10 w-48 h-48 sm:w-72 sm:h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
-          <div className="absolute bottom-20 right-10 w-48 h-48 sm:w-72 sm:h-72 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
-          
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-              <div className="text-center lg:text-left">
-                <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-lg text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-full mb-4 sm:mb-6 border border-white/20 text-xs sm:text-sm">
-                  <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400" />
-                  <span className="font-semibold">India's Most Advanced AI Learning Platform</span>
+      {/* Hero Section — exact same design, only heading text updated */}
+      <div className="relative bg-gradient-to-br from-indigo-950 via-purple-900 to-pink-900 overflow-hidden pt-24 pb-16 sm:pt-28 sm:pb-20 lg:pt-32 lg:pb-32">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-30" />
+        <div className="absolute top-20 left-10 w-48 h-48 sm:w-72 sm:h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
+        <div className="absolute bottom-20 right-10 w-48 h-48 sm:w-72 sm:h-72 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
+        
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+            <div className="text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-lg text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-full mb-4 sm:mb-6 border border-white/20 text-xs sm:text-sm">
+                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400" />
+                <span className="font-semibold">India's Most Advanced AI Learning Platform</span>
+              </div>
+              
+              {/* FIX: Updated heading to match new name & tagline */}
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-4 sm:mb-6 leading-tight">
+                Learn with
+                <span className="block bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-400 bg-clip-text text-transparent mt-2">
+                  Intensity
+                </span>
+              </h1>
+              
+              <p className="text-base sm:text-lg lg:text-xl text-purple-100 mb-6 sm:mb-8 leading-relaxed max-w-2xl mx-auto lg:mx-0">
+                Join 50,000+ students achieving their dreams with personalized AI study plans, live expert classes, and 24/7 intelligent support.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-10 justify-center lg:justify-start">
+                {session ? (
+                  <button 
+                    onClick={() => openFeature('study-planner')}
+                    className="group bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all flex items-center justify-center gap-2"
+                  >
+                    Go to Dashboard
+                    <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setAuthScreen('register')}
+                    className="group bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all flex items-center justify-center gap-2"
+                  >
+                    Start Learning Free
+                    <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                )}
+                <button className="group bg-white/10 backdrop-blur-lg text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:bg-white/20 transition-all flex items-center justify-center gap-2 border-2 border-white/20">
+                  <Play className="w-4 h-4 sm:w-5 sm:h-5" />
+                  Watch Demo
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6 justify-center lg:justify-start">
+                <div className="flex -space-x-2 sm:-space-x-3">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 border-2 sm:border-3 border-purple-900 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
+                      {String.fromCharCode(64 + i)}
+                    </div>
+                  ))}
                 </div>
+                <div>
+                  <div className="flex text-yellow-400 mb-1">
+                    {[1, 2, 3, 4, 5].map((i) => <Star key={i} className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />)}
+                  </div>
+                  <p className="text-purple-200 text-xs sm:text-sm font-medium">50,000+ Happy Students</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative hidden lg:block">
+              <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-3xl blur-3xl opacity-20 animate-pulse" />
+              <div className="relative bg-white/10 backdrop-blur-2xl rounded-3xl p-6 lg:p-8 border border-white/20 shadow-2xl">
+                <div className="bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl p-4 lg:p-6 mb-4 lg:mb-6">
+                  <div className="flex items-center justify-between mb-3 lg:mb-4">
+                    <span className="text-white font-semibold text-xs sm:text-sm">Live Now</span>
+                    <span className="flex items-center gap-2 bg-red-500 text-white px-2 lg:px-3 py-1 rounded-full text-xs font-semibold">
+                      <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                      1,247 watching
+                    </span>
+                  </div>
+                  <div className="aspect-video bg-gradient-to-br from-indigo-900 to-purple-900 rounded-xl flex items-center justify-center mb-3 lg:mb-4 relative overflow-hidden">
+                    <Play className="w-12 h-12 lg:w-16 lg:h-16 text-white opacity-80" />
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 lg:p-4">
+                      <div className="flex items-center gap-2 text-white text-xs">
+                        <Clock className="w-3 h-3" />
+                        <span>2:34:12</span>
+                      </div>
+                    </div>
+                  </div>
+                  <h3 className="text-white font-bold text-base lg:text-lg mb-1">Advanced Physics - Thermodynamics</h3>
+                  <p className="text-purple-200 text-xs sm:text-sm">Dr. Rajesh Sharma • JEE Advanced Batch</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 lg:gap-4">
+                  <div className="bg-white/10 backdrop-blur-lg rounded-xl p-3 lg:p-4 border border-white/20">
+                    <Brain className="w-6 h-6 lg:w-8 lg:h-8 text-yellow-400 mb-2" />
+                    <p className="text-white font-bold text-base lg:text-lg">AI Tutor</p>
+                    <p className="text-purple-200 text-xs">Instant Answers</p>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-lg rounded-xl p-3 lg:p-4 border border-white/20">
+                    <Target className="w-6 h-6 lg:w-8 lg:h-8 text-green-400 mb-2" />
+                    <p className="text-white font-bold text-base lg:text-lg">Mock Tests</p>
+                    <p className="text-purple-200 text-xs">Unlimited Access</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-12 sm:mt-16 grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            {stats.map((stat, idx) => (
+              <div key={idx} className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20 text-center hover:bg-white/15 transition-all">
+                <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl mb-2 sm:mb-3">
+                  <stat.icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-bold text-white mb-1">{stat.value}</div>
+                <div className="text-purple-200 text-xs sm:text-sm">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Platform Features */}
+      <div id="platform" className="py-16 sm:py-20 lg:py-28 bg-gradient-to-b from-white via-gray-50 to-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12 sm:mb-16">
+            <div className="inline-flex items-center gap-2 bg-indigo-100 text-indigo-700 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full mb-4 text-xs sm:text-sm">
+              <Zap className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="font-semibold">COMPLETE LEARNING ECOSYSTEM</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-gray-900 mb-4 sm:mb-6 px-4">
+              Access Our Entire
+              <span className="block bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mt-2">
+                Learning Platform
+              </span>
+            </h2>
+            <p className="text-base sm:text-lg lg:text-xl text-gray-600 max-w-3xl mx-auto px-4">
+              {session ? 'Click any card below to explore our powerful tools' : 'Sign up to unlock all features and start your learning journey'}
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            {platformFeatures.map((feature) => (
+              <button
+                key={feature.id}
+                onClick={() => openFeature(feature.id)}
+                className="group relative bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-gray-100 hover:border-indigo-500 overflow-hidden text-left w-full"
+              >
+                {!session && (
+                  <div className="absolute top-3 left-3 bg-gray-900/80 backdrop-blur-sm text-white p-1.5 rounded-lg">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                )}
                 
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-4 sm:mb-6 leading-tight">
-                  Master Your Exams with
-                  <span className="block bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-400 bg-clip-text text-transparent mt-2">
-                    AI-Powered Precision
-                  </span>
-                </h1>
-                
-                <p className="text-base sm:text-lg lg:text-xl text-purple-100 mb-6 sm:mb-8 leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                  Join 50,000+ students achieving their dreams with personalized AI study plans, live expert classes, and 24/7 intelligent support.
+                {feature.tag && (
+                  <div className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-bold">
+                    {feature.tag}
+                  </div>
+                )}
+
+                <div className={`inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br ${feature.color} rounded-xl sm:rounded-2xl mb-3 sm:mb-5 group-hover:scale-110 transition-transform shadow-lg ${!session ? 'opacity-50' : ''}`}>
+                  <feature.icon className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+                </div>
+
+                <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 mb-2 sm:mb-3 group-hover:text-indigo-600 transition-colors">
+                  {feature.title}
+                </h3>
+                <p className="text-gray-600 text-xs sm:text-sm mb-3 sm:mb-4 leading-relaxed">
+                  {feature.description}
                 </p>
 
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-10 justify-center lg:justify-start">
-                  {session ? (
-                    <button 
-                      onClick={() => openFeature('study-planner')}
-                      className="group bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all flex items-center justify-center gap-2"
-                    >
-                      Go to Dashboard
-                      <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => setAuthScreen('register')}
-                      className="group bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all flex items-center justify-center gap-2"
-                    >
-                      Start Learning Free
-                      <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
-                    </button>
-                  )}
-                  <button className="group bg-white/10 backdrop-blur-lg text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:bg-white/20 transition-all flex items-center justify-center gap-2 border-2 border-white/20">
-                    <Play className="w-4 h-4 sm:w-5 sm:h-5" />
-                    Watch Demo
-                  </button>
+                <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-gray-100">
+                  <span className="text-xs text-gray-500 font-medium">{feature.stats}</span>
+                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 group-hover:translate-x-1 transition-transform" />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4 sm:gap-6 justify-center lg:justify-start">
-                  <div className="flex -space-x-2 sm:-space-x-3">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <div key={i} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 border-2 sm:border-3 border-purple-900 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
-                        {String.fromCharCode(64 + i)}
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <div className="flex text-yellow-400 mb-1">
-                      {[1, 2, 3, 4, 5].map((i) => <Star key={i} className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />)}
-                    </div>
-                    <p className="text-purple-200 text-xs sm:text-sm font-medium">50,000+ Happy Students</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="relative hidden lg:block">
-                <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-3xl blur-3xl opacity-20 animate-pulse" />
-                <div className="relative bg-white/10 backdrop-blur-2xl rounded-3xl p-6 lg:p-8 border border-white/20 shadow-2xl">
-                  <div className="bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl p-4 lg:p-6 mb-4 lg:mb-6">
-                    <div className="flex items-center justify-between mb-3 lg:mb-4">
-                      <span className="text-white font-semibold text-xs sm:text-sm">Live Now</span>
-                      <span className="flex items-center gap-2 bg-red-500 text-white px-2 lg:px-3 py-1 rounded-full text-xs font-semibold">
-                        <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                        1,247 watching
-                      </span>
-                    </div>
-                    <div className="aspect-video bg-gradient-to-br from-indigo-900 to-purple-900 rounded-xl flex items-center justify-center mb-3 lg:mb-4 relative overflow-hidden">
-                      <Play className="w-12 h-12 lg:w-16 lg:h-16 text-white opacity-80" />
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 lg:p-4">
-                        <div className="flex items-center gap-2 text-white text-xs">
-                          <Clock className="w-3 h-3" />
-                          <span>2:34:12</span>
-                        </div>
-                      </div>
-                    </div>
-                    <h3 className="text-white font-bold text-base lg:text-lg mb-1">Advanced Physics - Thermodynamics</h3>
-                    <p className="text-purple-200 text-xs sm:text-sm">Dr. Rajesh Sharma • JEE Advanced Batch</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 lg:gap-4">
-                    <div className="bg-white/10 backdrop-blur-lg rounded-xl p-3 lg:p-4 border border-white/20">
-                      <Brain className="w-6 h-6 lg:w-8 lg:h-8 text-yellow-400 mb-2" />
-                      <p className="text-white font-bold text-base lg:text-lg">AI Tutor</p>
-                      <p className="text-purple-200 text-xs">Instant Answers</p>
-                    </div>
-                    <div className="bg-white/10 backdrop-blur-lg rounded-xl p-3 lg:p-4 border border-white/20">
-                      <Target className="w-6 h-6 lg:w-8 lg:h-8 text-green-400 mb-2" />
-                      <p className="text-white font-bold text-base lg:text-lg">Mock Tests</p>
-                      <p className="text-purple-200 text-xs">Unlimited Access</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-12 sm:mt-16 grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              {stats.map((stat, idx) => (
-                <div key={idx} className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20 text-center hover:bg-white/15 transition-all">
-                  <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl mb-2 sm:mb-3">
-                    <stat.icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-bold text-white mb-1">{stat.value}</div>
-                  <div className="text-purple-200 text-xs sm:text-sm">{stat.label}</div>
-                </div>
-              ))}
-            </div>
+                <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity pointer-events-none`} />
+              </button>
+            ))}
           </div>
-        </div>
 
-        {/* Platform Features */}
-        <div id="platform" className="py-16 sm:py-20 lg:py-28 bg-gradient-to-b from-white via-gray-50 to-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12 sm:mb-16">
-              <div className="inline-flex items-center gap-2 bg-indigo-100 text-indigo-700 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full mb-4 text-xs sm:text-sm">
-                <Zap className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="font-semibold">COMPLETE LEARNING ECOSYSTEM</span>
-              </div>
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-gray-900 mb-4 sm:mb-6 px-4">
-                Access Our Entire
-                <span className="block bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mt-2">
-                  Learning Platform
-                </span>
-              </h2>
-              <p className="text-base sm:text-lg lg:text-xl text-gray-600 max-w-3xl mx-auto px-4">
-                {session ? 'Click any card below to explore our powerful tools' : 'Sign up to unlock all features and start your learning journey'}
-              </p>
+          {!session && (
+            <div className="text-center mt-12">
+              <button
+                onClick={() => setAuthScreen('register')}
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:shadow-2xl hover:scale-105 transition-all"
+              >
+                <Lock className="w-5 h-5" />
+                Sign Up to Unlock All Features
+                <ArrowRight className="w-5 h-5" />
+              </button>
             </div>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              {platformFeatures.map((feature) => (
-                <button
-                  key={feature.id}
-                  onClick={() => openFeature(feature.id)}
-                  className="group relative bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-gray-100 hover:border-indigo-500 overflow-hidden text-left w-full"
-                >
-                  {!session && (
-                    <div className="absolute top-3 left-3 bg-gray-900/80 backdrop-blur-sm text-white p-1.5 rounded-lg">
-                      <Lock className="w-4 h-4" />
-                    </div>
-                  )}
-                  
-                  {feature.tag && (
-                    <div className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-bold">
-                      {feature.tag}
-                    </div>
-                  )}
-
-                  <div className={`inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br ${feature.color} rounded-xl sm:rounded-2xl mb-3 sm:mb-5 group-hover:scale-110 transition-transform shadow-lg ${!session ? 'opacity-50' : ''}`}>
-                    <feature.icon className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
-                  </div>
-
-                  <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 mb-2 sm:mb-3 group-hover:text-indigo-600 transition-colors">
-                    {feature.title}
-                  </h3>
-                  <p className="text-gray-600 text-xs sm:text-sm mb-3 sm:mb-4 leading-relaxed">
-                    {feature.description}
-                  </p>
-
-                  <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-gray-100">
-                    <span className="text-xs text-gray-500 font-medium">{feature.stats}</span>
-                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 group-hover:translate-x-1 transition-transform" />
-                  </div>
-
-                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity pointer-events-none`} />
-                </button>
-              ))}
-            </div>
-
-            {!session && (
-              <div className="text-center mt-12">
-                <button
-                  onClick={() => setAuthScreen('register')}
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:shadow-2xl hover:scale-105 transition-all"
-                >
-                  <Lock className="w-5 h-5" />
-                  Sign Up to Unlock All Features
-                  <ArrowRight className="w-5 h-5" />
-                </button>
-              </div>
-            )}
-          </div>
+          )}
         </div>
+      </div>
 
-        {/* How It Works */}
+      {/* How It Works — FIX: only shown to non-logged-in users */}
+      {!session && (
         <div id="how-it-works" className="py-16 sm:py-20 lg:py-28 bg-gradient-to-br from-indigo-50 to-purple-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-12 sm:mb-16">
@@ -1496,186 +1493,189 @@ const ProtectedLanding = () => {
             </div>
           </div>
         </div>
+      )}
 
-        {/* Testimonials */}
-        <div id="testimonials" className="py-16 sm:py-20 lg:py-28 bg-gradient-to-br from-indigo-950 via-purple-900 to-pink-900 relative overflow-hidden">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PHBhdGggZD0iTTM2IDM0djItaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-50" />
-          
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12 sm:mb-16">
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4 sm:mb-6 px-4">Real Success Stories</h2>
-              <p className="text-base sm:text-lg lg:text-xl text-purple-200 px-4">From students who trusted EduElite</p>
-            </div>
+      {/* Testimonials */}
+      <div id="testimonials" className="py-16 sm:py-20 lg:py-28 bg-gradient-to-br from-indigo-950 via-purple-900 to-pink-900 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PHBhdGggZD0iTTM2IDM0djItaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-50" />
+        
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4 sm:mb-6 px-4">Real Success Stories</h2>
+            <p className="text-base sm:text-lg lg:text-xl text-purple-200 px-4">From students who trusted Intense Learners</p>
+          </div>
 
-            <div className="max-w-5xl mx-auto relative min-h-[400px] sm:min-h-[350px]">
-              {testimonials.map((testimonial, idx) => (
-                <div
-                  key={idx}
-                  className={`transition-all duration-700 ${idx === activeTestimonial ? 'opacity-100 scale-100 relative' : 'opacity-0 scale-95 absolute inset-0 pointer-events-none'}`}
-                >
-                  <div className="bg-white/10 backdrop-blur-2xl rounded-2xl sm:rounded-3xl p-6 sm:p-8 lg:p-12 border border-white/20 shadow-2xl">
-                    <div className="flex text-yellow-400 mb-4 sm:mb-6 justify-center lg:justify-start">
-                      {[...Array(testimonial.rating)].map((_, i) => (
-                        <Star key={i} className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
-                      ))}
+          <div className="max-w-5xl mx-auto relative min-h-[400px] sm:min-h-[350px]">
+            {testimonials.map((testimonial, idx) => (
+              <div
+                key={idx}
+                className={`transition-all duration-700 ${idx === activeTestimonial ? 'opacity-100 scale-100 relative' : 'opacity-0 scale-95 absolute inset-0 pointer-events-none'}`}
+              >
+                <div className="bg-white/10 backdrop-blur-2xl rounded-2xl sm:rounded-3xl p-6 sm:p-8 lg:p-12 border border-white/20 shadow-2xl">
+                  <div className="flex text-yellow-400 mb-4 sm:mb-6 justify-center lg:justify-start">
+                    {[...Array(testimonial.rating)].map((_, i) => (
+                      <Star key={i} className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
+                    ))}
+                  </div>
+                  <p className="text-lg sm:text-xl lg:text-2xl xl:text-3xl text-white mb-6 sm:mb-8 leading-relaxed font-light">
+                    "{testimonial.text}"
+                  </p>
+                  <div className="flex items-center gap-4 flex-col sm:flex-row text-center sm:text-left">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-xl sm:text-2xl shadow-lg flex-shrink-0">
+                      {testimonial.image}
                     </div>
-                    <p className="text-lg sm:text-xl lg:text-2xl xl:text-3xl text-white mb-6 sm:mb-8 leading-relaxed font-light">
-                      "{testimonial.text}"
-                    </p>
-                    <div className="flex items-center gap-4 flex-col sm:flex-row text-center sm:text-left">
-                      <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-xl sm:text-2xl shadow-lg flex-shrink-0">
-                        {testimonial.image}
-                      </div>
-                      <div>
-                        <div className="text-white font-bold text-lg sm:text-xl">{testimonial.name}</div>
-                        <div className="text-purple-200 font-medium text-sm sm:text-base">{testimonial.role}</div>
-                        <div className="text-purple-300 text-xs sm:text-sm">{testimonial.course}</div>
-                      </div>
+                    <div>
+                      <div className="text-white font-bold text-lg sm:text-xl">{testimonial.name}</div>
+                      <div className="text-purple-200 font-medium text-sm sm:text-base">{testimonial.role}</div>
+                      <div className="text-purple-300 text-xs sm:text-sm">{testimonial.course}</div>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
+          </div>
 
-            <div className="flex justify-center gap-2 sm:gap-3 mt-8 sm:mt-10">
-              {testimonials.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setActiveTestimonial(idx)}
-                  className={`transition-all rounded-full ${idx === activeTestimonial ? 'bg-white w-10 sm:w-12 h-2.5 sm:h-3' : 'bg-white/30 hover:bg-white/50 w-2.5 sm:w-3 h-2.5 sm:h-3'}`}
-                />
-              ))}
-            </div>
+          <div className="flex justify-center gap-2 sm:gap-3 mt-8 sm:mt-10">
+            {testimonials.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveTestimonial(idx)}
+                className={`transition-all rounded-full ${idx === activeTestimonial ? 'bg-white w-10 sm:w-12 h-2.5 sm:h-3' : 'bg-white/30 hover:bg-white/50 w-2.5 sm:w-3 h-2.5 sm:h-3'}`}
+              />
+            ))}
           </div>
         </div>
-
-        {/* Benefits */}
-        <div className="py-12 sm:py-16 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
-              {benefits.map((benefit, idx) => (
-                <div key={idx} className="text-center">
-                  <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl mb-2 sm:mb-3">
-                    <benefit.icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                  </div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-700">{benefit.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* CTA */}
-        <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 py-16 sm:py-20 lg:py-28 relative overflow-hidden">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzR2Mi1oMnYtMnptMC00djJoMnYtMnptMC00djJoMnYtMnptMC00djJoMnYtMnoiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-50" />
-          
-          <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-4 sm:mb-6 px-4">
-              Ready to Transform Your Future?
-            </h2>
-            <p className="text-base sm:text-lg lg:text-xl xl:text-2xl text-purple-100 mb-8 sm:mb-10 max-w-3xl mx-auto px-4">
-              Join 50,000+ students already learning with EduElite. Start your free trial today—no credit card required.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
-              {session ? (
-                <button
-                  onClick={() => openFeature('study-planner')}
-                  className="group bg-white text-purple-900 px-8 sm:px-10 py-4 sm:py-5 rounded-xl font-bold text-lg sm:text-xl hover:shadow-2xl hover:scale-105 transition-all inline-flex items-center justify-center gap-2 sm:gap-3"
-                >
-                  Go to Your Dashboard
-                  <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-x-1 transition-transform" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setAuthScreen('register')}
-                  className="group bg-white text-purple-900 px-8 sm:px-10 py-4 sm:py-5 rounded-xl font-bold text-lg sm:text-xl hover:shadow-2xl hover:scale-105 transition-all inline-flex items-center justify-center gap-2 sm:gap-3"
-                >
-                  Start Free Trial Now
-                  <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-x-1 transition-transform" />
-                </button>
-              )}
-              <button className="bg-white/10 backdrop-blur-lg text-white px-8 sm:px-10 py-4 sm:py-5 rounded-xl font-bold text-lg sm:text-xl hover:bg-white/20 transition-all inline-flex items-center justify-center gap-2 sm:gap-3 border-2 border-white/30">
-                <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />
-                Book a Demo
-              </button>
-            </div>
-            <p className="text-purple-200 mt-4 sm:mt-6 text-xs sm:text-sm px-4">✓ 14-day free trial  ✓ No credit card required  ✓ Cancel anytime</p>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <footer className="bg-gray-900 text-white py-12 sm:py-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-8 sm:gap-12 mb-8 sm:mb-12">
-              <div className="lg:col-span-2">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center">
-                    <Rocket className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-                  </div>
-                  <div>
-                    <span className="text-xl sm:text-2xl font-bold">EduElite</span>
-                    <div className="text-xs text-gray-400">AI-Powered Learning</div>
-                  </div>
-                </div>
-                <p className="text-gray-400 leading-relaxed mb-6 text-sm sm:text-base">
-                  Transforming education through artificial intelligence and expert teaching. Join thousands of students achieving their dreams.
-                </p>
-                <div className="flex gap-3">
-                  {['twitter', 'facebook', 'instagram', 'linkedin'].map((social) => (
-                    <button key={social} className="w-10 h-10 bg-gray-800 hover:bg-indigo-600 rounded-lg flex items-center justify-center transition-colors">
-                      <div className="w-5 h-5 bg-white/20 rounded" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-bold text-base sm:text-lg mb-4">Platform</h4>
-                <ul className="space-y-3 text-gray-400 text-sm sm:text-base">
-                  <li><button onClick={() => openFeature('notes')} className="hover:text-white transition-colors">Study Notes</button></li>
-                  <li><button onClick={() => openFeature('assignments')} className="hover:text-white transition-colors">Assignments</button></li>
-                  <li><button onClick={() => openFeature('study-planner')} className="hover:text-white transition-colors">AI Study Planner</button></li>
-                  <li><button onClick={() => openFeature('quizzes')} className="hover:text-white transition-colors">Mock Tests</button></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-bold text-base sm:text-lg mb-4">Resources</h4>
-                <ul className="space-y-3 text-gray-400 text-sm sm:text-base">
-                  <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Community</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Contact Us</a></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-bold text-base sm:text-lg mb-4">Legal</h4>
-                <ul className="space-y-3 text-gray-400 text-sm sm:text-base">
-                  <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Terms of Service</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Cookie Policy</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Refund Policy</a></li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-800 pt-6 sm:pt-8">
-              <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm sm:text-base">
-                <p className="text-gray-400 text-center md:text-left">
-                  © 2026 EduElite Technologies Pvt. Ltd. All rights reserved.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 text-gray-400 text-center">
-                  <span>Made with ❤️ in India</span>
-                  <span className="hidden sm:inline">•</span>
-                  <span>Trusted by 50,000+ students</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </footer>
       </div>
-    );
-  };
 
-  export default ProtectedLanding;
+      {/* Benefits */}
+      <div className="py-12 sm:py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
+            {benefits.map((benefit, idx) => (
+              <div key={idx} className="text-center">
+                <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl mb-2 sm:mb-3">
+                  <benefit.icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                </div>
+                <p className="text-xs sm:text-sm font-medium text-gray-700">{benefit.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 py-16 sm:py-20 lg:py-28 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzR2Mi1oMnYtMnptMC00djJoMnYtMnptMC00djJoMnYtMnptMC00djJoMnYtMnoiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-50" />
+        
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-4 sm:mb-6 px-4">
+            Ready to Transform Your Future?
+          </h2>
+          <p className="text-base sm:text-lg lg:text-xl xl:text-2xl text-purple-100 mb-8 sm:mb-10 max-w-3xl mx-auto px-4">
+            Join 50,000+ students already learning with Intense Learners. Start your free trial today—no credit card required.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
+            {session ? (
+              <button
+                onClick={() => openFeature('study-planner')}
+                className="group bg-white text-purple-900 px-8 sm:px-10 py-4 sm:py-5 rounded-xl font-bold text-lg sm:text-xl hover:shadow-2xl hover:scale-105 transition-all inline-flex items-center justify-center gap-2 sm:gap-3"
+              >
+                Go to Your Dashboard
+                <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-x-1 transition-transform" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setAuthScreen('register')}
+                className="group bg-white text-purple-900 px-8 sm:px-10 py-4 sm:py-5 rounded-xl font-bold text-lg sm:text-xl hover:shadow-2xl hover:scale-105 transition-all inline-flex items-center justify-center gap-2 sm:gap-3"
+              >
+                Start Free Trial Now
+                <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-x-1 transition-transform" />
+              </button>
+            )}
+            <button className="bg-white/10 backdrop-blur-lg text-white px-8 sm:px-10 py-4 sm:py-5 rounded-xl font-bold text-lg sm:text-xl hover:bg-white/20 transition-all inline-flex items-center justify-center gap-2 sm:gap-3 border-2 border-white/30">
+              <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />
+              Book a Demo
+            </button>
+          </div>
+          <p className="text-purple-200 mt-4 sm:mt-6 text-xs sm:text-sm px-4">✓ 14-day free trial  ✓ No credit card required  ✓ Cancel anytime</p>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-12 sm:py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-8 sm:gap-12 mb-8 sm:mb-12">
+            <div className="lg:col-span-2">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center">
+                  <Rocket className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                </div>
+                <div>
+                  {/* FIX: Updated name and tagline */}
+                  <span className="text-xl sm:text-2xl font-bold">Intense Learners</span>
+                  <div className="text-xs text-gray-400">Learn with intensity</div>
+                </div>
+              </div>
+              <p className="text-gray-400 leading-relaxed mb-6 text-sm sm:text-base">
+                Transforming education through artificial intelligence and expert teaching. Join thousands of students achieving their dreams.
+              </p>
+              <div className="flex gap-3">
+                {['twitter', 'facebook', 'instagram', 'linkedin'].map((social) => (
+                  <button key={social} className="w-10 h-10 bg-gray-800 hover:bg-indigo-600 rounded-lg flex items-center justify-center transition-colors">
+                    <div className="w-5 h-5 bg-white/20 rounded" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-base sm:text-lg mb-4">Platform</h4>
+              <ul className="space-y-3 text-gray-400 text-sm sm:text-base">
+                <li><button onClick={() => openFeature('notes')} className="hover:text-white transition-colors">Study Notes</button></li>
+                <li><button onClick={() => openFeature('assignments')} className="hover:text-white transition-colors">Assignments</button></li>
+                <li><button onClick={() => openFeature('study-planner')} className="hover:text-white transition-colors">AI Study Planner</button></li>
+                <li><button onClick={() => openFeature('quizzes')} className="hover:text-white transition-colors">Mock Tests</button></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-base sm:text-lg mb-4">Resources</h4>
+              <ul className="space-y-3 text-gray-400 text-sm sm:text-base">
+                <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Community</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Contact Us</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-base sm:text-lg mb-4">Legal</h4>
+              <ul className="space-y-3 text-gray-400 text-sm sm:text-base">
+                <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Terms of Service</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Cookie Policy</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Refund Policy</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-800 pt-6 sm:pt-8">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm sm:text-base">
+              <p className="text-gray-400 text-center md:text-left">
+                {/* FIX: Updated copyright name */}
+                © 2026 Intense Learners Technologies Pvt. Ltd. All rights reserved.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 text-gray-400 text-center">
+                <span>Made with ❤️ in India</span>
+                <span className="hidden sm:inline">•</span>
+                <span>Trusted by 50,000+ students</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default ProtectedLanding;
