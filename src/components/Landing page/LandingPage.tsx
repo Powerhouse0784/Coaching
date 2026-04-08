@@ -12,7 +12,8 @@ import {
   Calendar, FileText, UserCheck, Globe, Headphones, Lock,
   ArrowLeft, Home, LogOut, User as UserIcon, Eye, EyeOff, 
   Mail, Chrome, AlertCircle, CheckCircle2, Settings, Edit,
-  Moon, Sun, BookOpen
+  Moon, Sun, BookOpen, Twitter, Facebook, Instagram, Linkedin,
+  KeyRound, CheckCircle, Send
 } from 'lucide-react';
 
 // Import your components
@@ -37,33 +38,152 @@ interface FormData {
   confirmPassword: string;
 }
 
-// ─── Coaching Logo Component ──────────────────────────────────────────────────
+// ─── Coaching Logo ─────────────────────────────────────────────────────────────
 function CoachingLogo({ className = "w-full h-full" }: { className?: string }) {
   return (
-    <Image
-      src="/coaching-icon.png"
-      alt="Intense Learners"
-      width={48}
-      height={48}
-      className={className}
-      priority
-    />
+    <Image src="/coaching-icon.png" alt="Intense Learners" width={48} height={48} className={className} priority />
   );
 }
 
-// ─── Login Page ───────────────────────────────────────────────────────────────
-const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void }> = ({ onSwitchToRegister, onBack }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'STUDENT' | 'TEACHER'>('STUDENT');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+// ─── Social icons map ──────────────────────────────────────────────────────────
+const socialIcons: Record<string, React.ReactNode> = {
+  twitter:   <Twitter  className="w-4 h-4" />,
+  facebook:  <Facebook className="w-4 h-4" />,
+  instagram: <Instagram className="w-4 h-4" />,
+  linkedin:  <Linkedin  className="w-4 h-4" />,
+};
+const socialLinks: Record<string, string> = {
+  twitter:   'https://twitter.com/',
+  facebook:  'https://facebook.com/',
+  instagram: 'https://instagram.com/',
+  linkedin:  'https://linkedin.com/',
+};
+
+// ─── Forgot Password Page ──────────────────────────────────────────────────────
+const ForgotPasswordPage: React.FC<{ onBack: () => void; darkMode: boolean }> = ({ onBack, darkMode }) => {
+  const dm = darkMode;
+  const [step, setStep]         = useState<'email' | 'sent'>('email');
+  const [email, setEmail]       = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send reset email');
+      setStep('sent');
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={`min-h-screen flex items-center justify-center p-4 transition-colors ${dm ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-50 via-white to-purple-50'}`}>
+      <div className="w-full max-w-md">
+        <button onClick={onBack} className={`flex items-center gap-2 font-semibold mb-4 sm:mb-6 transition-colors group ${dm ? 'text-gray-300 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'}`}>
+          <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-colors shadow-md ${dm ? 'bg-gray-800 group-hover:bg-indigo-900' : 'bg-white group-hover:bg-indigo-100'}`}>
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+          </div>
+          <span className="text-sm sm:text-base">Back to Sign In</span>
+        </button>
+
+        <div className={`rounded-2xl shadow-xl p-6 sm:p-8 border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
+          <div className="text-center mb-6 sm:mb-8">
+            <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center ${dm ? 'bg-indigo-900' : 'bg-indigo-100'}`}>
+              <KeyRound className={`w-7 h-7 sm:w-8 sm:h-8 ${dm ? 'text-indigo-400' : 'text-indigo-600'}`} />
+            </div>
+            <h1 className={`text-xl sm:text-2xl font-bold mb-1.5 ${dm ? 'text-white' : 'text-gray-900'}`}>
+              {step === 'email' ? 'Forgot Password?' : 'Check Your Email'}
+            </h1>
+            <p className={`text-xs sm:text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
+              {step === 'email'
+                ? "No worries! Enter your email and we'll send you reset instructions."
+                : `We've sent a password reset link to ${email}`}
+            </p>
+          </div>
+
+          {step === 'email' ? (
+            <>
+              {error && (
+                <div className={`mb-5 p-3 sm:p-4 rounded-xl flex items-center gap-3 border ${dm ? 'bg-red-950 border-red-800 text-red-300' : 'bg-red-50 border-red-200 text-red-600'}`}>
+                  <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                  <p className="text-xs sm:text-sm">{error}</p>
+                </div>
+              )}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                    <input
+                      type="email" value={email} onChange={e => setEmail(e.target.value)}
+                      placeholder="you@example.com" required
+                      className={`w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition text-sm sm:text-base ${dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-200 text-gray-900'}`}
+                    />
+                  </div>
+                </div>
+                <button type="submit" disabled={loading}
+                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl py-2.5 sm:py-3 font-semibold hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base">
+                  {loading
+                    ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Sending...</>
+                    : <><Send className="w-4 h-4" />Send Reset Link</>}
+                </button>
+              </form>
+            </>
+          ) : (
+            <div className="text-center space-y-4">
+              <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full mx-auto flex items-center justify-center ${dm ? 'bg-green-900' : 'bg-green-100'}`}>
+                <CheckCircle className={`w-8 h-8 sm:w-10 sm:h-10 ${dm ? 'text-green-400' : 'text-green-600'}`} />
+              </div>
+              <p className={`text-xs sm:text-sm leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
+                Click the link in the email to reset your password. If you don't see it, check your spam folder.
+              </p>
+              <button
+                onClick={() => setStep('email')}
+                className={`text-xs sm:text-sm font-semibold transition-colors ${dm ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'}`}>
+                Didn't receive it? Try again
+              </button>
+            </div>
+          )}
+
+          <p className={`text-center text-xs sm:text-sm mt-5 sm:mt-6 ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
+            Remembered your password?{' '}
+            <button onClick={onBack} className={`font-semibold ${dm ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'}`}>
+              Sign in
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Login Page ────────────────────────────────────────────────────────────────
+const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void; darkMode: boolean }> = ({ onSwitchToRegister, onBack, darkMode }) => {
+  const dm = darkMode;
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
+  const [role, setRole]             = useState<'STUDENT' | 'TEACHER'>('STUDENT');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
+  const [showForgot, setShowForgot] = useState(false);
+
+  if (showForgot) return <ForgotPasswordPage onBack={() => setShowForgot(false)} darkMode={dm} />;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true); setError('');
     try {
       const result = await signIn('credentials', { email, password, role, redirect: false });
       if (result?.error) {
@@ -80,58 +200,63 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+    <div className={`min-h-screen flex items-center justify-center p-4 transition-colors ${dm ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-50 via-white to-purple-50'}`}>
       <div className="w-full max-w-md">
         {onBack && (
-          <button onClick={onBack} className="flex items-center gap-2 text-gray-700 hover:text-indigo-600 font-semibold mb-4 transition-colors group">
-            <div className="w-10 h-10 bg-white group-hover:bg-indigo-100 rounded-xl flex items-center justify-center transition-colors shadow-md">
-              <ArrowLeft className="w-5 h-5" />
+          <button onClick={onBack} className={`flex items-center gap-2 font-semibold mb-4 transition-colors group ${dm ? 'text-gray-300 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'}`}>
+            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-colors shadow-md ${dm ? 'bg-gray-800 group-hover:bg-indigo-900' : 'bg-white group-hover:bg-indigo-100'}`}>
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <span>Back to Home</span>
+            <span className="text-sm sm:text-base">Back to Home</span>
           </button>
         )}
-        <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 border border-gray-100">
+
+        <div className={`rounded-2xl shadow-xl p-6 sm:p-8 border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
           <div className="text-center mb-6 sm:mb-8">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 flex items-center justify-center">
+            <div className="w-13 h-13 sm:w-16 sm:h-16 mx-auto mb-4 flex items-center justify-center">
               <CoachingLogo />
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Welcome Back</h1>
-            <p className="text-gray-600 mt-1.5 text-sm sm:text-base">Sign in to continue learning</p>
+            <h1 className={`text-xl sm:text-2xl font-bold ${dm ? 'text-white' : 'text-gray-900'}`}>Welcome Back</h1>
+            <p className={`mt-1.5 text-xs sm:text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>Sign in to continue learning</p>
           </div>
 
           {error && (
-            <div className="mb-5 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0" />
-              <p className="text-xs sm:text-sm text-red-600">{error}</p>
+            <div className={`mb-5 p-3 sm:p-4 rounded-xl flex items-center gap-3 border ${dm ? 'bg-red-950 border-red-800 text-red-300' : 'bg-red-50 border-red-200 text-red-600'}`}>
+              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+              <p className="text-xs sm:text-sm">{error}</p>
             </div>
           )}
 
           <button onClick={() => signIn('google', { callbackUrl: '/' })} type="button"
-            className="w-full flex items-center justify-center gap-3 border-2 border-gray-200 rounded-xl py-2.5 sm:py-3 px-4 hover:bg-gray-50 transition-colors mb-5 sm:mb-6 text-sm sm:text-base">
-            <Chrome className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="font-medium text-gray-700">Continue with Google</span>
+            className={`w-full flex items-center justify-center gap-3 border-2 rounded-xl py-2.5 sm:py-3 px-4 transition-colors mb-5 sm:mb-6 text-sm sm:text-base font-medium ${dm ? 'border-gray-600 text-gray-200 hover:bg-gray-700' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+            <Chrome className="w-4 h-4 sm:w-5 sm:h-5" />Continue with Google
           </button>
 
           <div className="relative mb-5 sm:mb-6">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
-            <div className="relative flex justify-center text-xs sm:text-sm"><span className="px-4 bg-white text-gray-500">Or continue with email</span></div>
+            <div className="absolute inset-0 flex items-center"><div className={`w-full border-t ${dm ? 'border-gray-700' : 'border-gray-200'}`} /></div>
+            <div className="relative flex justify-center text-xs sm:text-sm">
+              <span className={`px-4 ${dm ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'}`}>Or continue with email</span>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Role selector */}
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">I am a:</label>
+              <label className={`block text-xs sm:text-sm font-medium mb-2 sm:mb-3 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>I am a:</label>
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 {[
-                  { val: 'STUDENT', icon: GraduationCap, label: 'Student', color: 'blue' },
-                  { val: 'TEACHER', icon: UserCheck, label: 'Teacher', color: 'purple' },
-                ].map(({ val, icon: Icon, label, color }) => (
+                  { val: 'STUDENT', icon: GraduationCap, label: 'Student' },
+                  { val: 'TEACHER', icon: UserCheck,     label: 'Teacher' },
+                ].map(({ val, icon: Icon, label }) => (
                   <button key={val} type="button" onClick={() => setRole(val as any)}
                     className={`p-3 sm:p-4 rounded-xl border-2 transition-all text-center ${
                       role === val
-                        ? `border-${color}-500 bg-${color}-50 text-${color}-700`
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? val === 'STUDENT'
+                          ? dm ? 'border-blue-500 bg-blue-900/40 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700'
+                          : dm ? 'border-purple-500 bg-purple-900/40 text-purple-300' : 'border-purple-500 bg-purple-50 text-purple-700'
+                        : dm ? 'border-gray-600 hover:border-gray-500 text-gray-400' : 'border-gray-200 hover:border-gray-300 text-gray-600'
                     }`}>
-                    <Icon className={`w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-1.5 sm:mb-2 ${role === val ? `text-${color}-500` : 'text-gray-400'}`} />
+                    <Icon className={`w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-1.5 sm:mb-2 ${role === val ? (val === 'STUDENT' ? 'text-blue-500' : 'text-purple-500') : 'text-gray-400'}`} />
                     <p className="font-semibold text-xs sm:text-sm">{label}</p>
                   </button>
                 ))}
@@ -139,21 +264,21 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
             </div>
 
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Email Address</label>
+              <label className={`block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Email Address</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required
-                  className="w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm sm:text-base" />
+                  className={`w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm sm:text-base ${dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-200 text-gray-900'}`} />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Password</label>
+              <label className={`block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                 <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" required
-                  className="w-full pl-10 sm:pl-11 pr-12 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm sm:text-base" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  className={`w-full pl-10 sm:pl-11 pr-12 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm sm:text-base ${dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-200 text-gray-900'}`} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300">
                   {showPassword ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5" />}
                 </button>
               </div>
@@ -161,10 +286,14 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
 
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span className="text-xs sm:text-sm text-gray-600">Remember me</span>
+                <input type="checkbox" className={`w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${dm ? 'border-gray-600' : ''}`} />
+                <span className={`text-xs sm:text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>Remember me</span>
               </label>
-              <button type="button" className="text-xs sm:text-sm text-blue-600 hover:text-blue-700 font-medium">Forgot password?</button>
+              {/* ── FIX 3: Working forgot password button ── */}
+              <button type="button" onClick={() => setShowForgot(true)}
+                className={`text-xs sm:text-sm font-medium transition-colors ${dm ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}>
+                Forgot password?
+              </button>
             </div>
 
             <button type="submit" disabled={loading}
@@ -173,9 +302,9 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
             </button>
           </form>
 
-          <p className="text-center text-xs sm:text-sm text-gray-600 mt-5 sm:mt-6">
+          <p className={`text-center text-xs sm:text-sm mt-5 sm:mt-6 ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
             Don't have an account?{' '}
-            <button onClick={onSwitchToRegister} className="text-blue-600 hover:text-blue-700 font-semibold">Sign up for free</button>
+            <button onClick={onSwitchToRegister} className={`font-semibold ${dm ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}>Sign up for free</button>
           </p>
         </div>
       </div>
@@ -183,15 +312,16 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void 
   );
 };
 
-// ─── Register Page ────────────────────────────────────────────────────────────
-const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void }> = ({ onSwitchToLogin, onBack }) => {
-  const [formData, setFormData] = useState<FormData>({ name: '', email: '', password: '', confirmPassword: '' });
-  const [role, setRole] = useState<'STUDENT' | 'TEACHER'>('STUDENT');
+// ─── Register Page ─────────────────────────────────────────────────────────────
+const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void; darkMode: boolean }> = ({ onSwitchToLogin, onBack, darkMode }) => {
+  const dm = darkMode;
+  const [formData, setFormData]     = useState<FormData>({ name: '', email: '', password: '', confirmPassword: '' });
+  const [role, setRole]             = useState<'STUDENT' | 'TEACHER'>('STUDENT');
   const [teacherCode, setTeacherCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
+  const [success, setSuccess]       = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const TEACHER_REGISTRATION_CODE = 'P8YGJCVR2';
 
@@ -229,99 +359,115 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 flex items-center justify-center p-4">
+    <div className={`min-h-screen flex items-center justify-center p-4 transition-colors ${dm ? 'bg-gray-900' : 'bg-gradient-to-br from-purple-50 via-white to-blue-50'}`}>
       <div className="w-full max-w-md">
         {onBack && (
-          <button onClick={onBack} className="flex items-center gap-2 text-gray-700 hover:text-indigo-600 font-semibold mb-4 transition-colors group">
-            <div className="w-10 h-10 bg-white group-hover:bg-indigo-100 rounded-xl flex items-center justify-center transition-colors shadow-md"><ArrowLeft className="w-5 h-5" /></div>
-            <span>Back to Home</span>
+          <button onClick={onBack} className={`flex items-center gap-2 font-semibold mb-4 transition-colors group ${dm ? 'text-gray-300 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'}`}>
+            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-colors shadow-md ${dm ? 'bg-gray-800 group-hover:bg-indigo-900' : 'bg-white group-hover:bg-indigo-100'}`}>
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+            </div>
+            <span className="text-sm sm:text-base">Back to Home</span>
           </button>
         )}
-        <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 border border-gray-100">
+
+        <div className={`rounded-2xl shadow-xl p-6 sm:p-8 border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
           <div className="text-center mb-6 sm:mb-8">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 flex items-center justify-center"><CoachingLogo /></div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Create Account</h1>
-            <p className="text-gray-600 mt-1.5 text-sm sm:text-base">Start your journey today</p>
+            <div className="w-13 h-13 sm:w-16 sm:h-16 mx-auto mb-4 flex items-center justify-center"><CoachingLogo /></div>
+            <h1 className={`text-xl sm:text-2xl font-bold ${dm ? 'text-white' : 'text-gray-900'}`}>Create Account</h1>
+            <p className={`mt-1.5 text-xs sm:text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>Start your journey today</p>
           </div>
 
-          {error && <div className="mb-4 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3"><AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0" /><p className="text-xs sm:text-sm text-red-600">{error}</p></div>}
-          {success && <div className="mb-4 p-3 sm:p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3"><CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" /><p className="text-xs sm:text-sm text-green-600">{success}</p></div>}
+          {error   && <div className={`mb-4 p-3 sm:p-4 rounded-xl flex items-center gap-3 border ${dm ? 'bg-red-950 border-red-800 text-red-300' : 'bg-red-50 border-red-200 text-red-600'}`}><AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" /><p className="text-xs sm:text-sm">{error}</p></div>}
+          {success && <div className={`mb-4 p-3 sm:p-4 rounded-xl flex items-center gap-3 border ${dm ? 'bg-green-950 border-green-800 text-green-300' : 'bg-green-50 border-green-200 text-green-600'}`}><CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" /><p className="text-xs sm:text-sm">{success}</p></div>}
 
           <button onClick={() => signIn('google', { callbackUrl: '/' })} type="button"
-            className="w-full flex items-center justify-center gap-3 border-2 border-gray-200 rounded-xl py-2.5 sm:py-3 px-4 hover:bg-gray-50 transition-colors mb-5 text-sm sm:text-base">
-            <Chrome className="w-4 h-4 sm:w-5 sm:h-5" /><span className="font-medium text-gray-700">Sign up with Google</span>
+            className={`w-full flex items-center justify-center gap-3 border-2 rounded-xl py-2.5 sm:py-3 px-4 transition-colors mb-5 text-sm sm:text-base font-medium ${dm ? 'border-gray-600 text-gray-200 hover:bg-gray-700' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+            <Chrome className="w-4 h-4 sm:w-5 sm:h-5" />Sign up with Google
           </button>
 
           <div className="relative mb-5">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
-            <div className="relative flex justify-center text-xs sm:text-sm"><span className="px-4 bg-white text-gray-500">Or register with email</span></div>
+            <div className="absolute inset-0 flex items-center"><div className={`w-full border-t ${dm ? 'border-gray-700' : 'border-gray-200'}`} /></div>
+            <div className="relative flex justify-center text-xs sm:text-sm">
+              <span className={`px-4 ${dm ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'}`}>Or register with email</span>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">I want to register as:</label>
+              <label className={`block text-xs sm:text-sm font-medium mb-2 sm:mb-3 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>I want to register as:</label>
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 {[
-                  { val: 'STUDENT', icon: GraduationCap, label: 'Student', sub: 'Learn and grow', color: 'blue' },
-                  { val: 'TEACHER', icon: UserCheck, label: 'Teacher', sub: 'Teach and inspire', color: 'purple' },
-                ].map(({ val, icon: Icon, label, sub, color }) => (
+                  { val: 'STUDENT', icon: GraduationCap, label: 'Student', sub: 'Learn and grow' },
+                  { val: 'TEACHER', icon: UserCheck,     label: 'Teacher', sub: 'Teach and inspire' },
+                ].map(({ val, icon: Icon, label, sub }) => (
                   <button key={val} type="button" onClick={() => { setRole(val as any); setTeacherCode(''); setError(''); }}
-                    className={`p-3 sm:p-4 rounded-xl border-2 transition-all text-center ${role === val ? `border-${color}-500 bg-${color}-50 text-${color}-700` : 'border-gray-200 hover:border-gray-300'}`}>
-                    <Icon className={`w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-1.5 sm:mb-2 ${role === val ? `text-${color}-500` : 'text-gray-400'}`} />
+                    className={`p-3 sm:p-4 rounded-xl border-2 transition-all text-center ${
+                      role === val
+                        ? val === 'STUDENT'
+                          ? dm ? 'border-blue-500 bg-blue-900/40 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700'
+                          : dm ? 'border-purple-500 bg-purple-900/40 text-purple-300' : 'border-purple-500 bg-purple-50 text-purple-700'
+                        : dm ? 'border-gray-600 hover:border-gray-500 text-gray-400' : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                    }`}>
+                    <Icon className={`w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-1.5 sm:mb-2 ${role === val ? (val === 'STUDENT' ? 'text-blue-500' : 'text-purple-500') : 'text-gray-400'}`} />
                     <p className="font-semibold text-xs sm:text-sm">{label}</p>
-                    <p className="text-[10px] sm:text-xs mt-0.5 text-gray-500">{sub}</p>
+                    <p className="text-[10px] sm:text-xs mt-0.5 opacity-70">{sub}</p>
                   </button>
                 ))}
               </div>
             </div>
 
             {role === 'TEACHER' && (
-              <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-3 sm:p-4">
-                <label className="block text-xs sm:text-sm font-medium text-purple-900 mb-2 flex items-center gap-2"><Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />Teacher Registration Code *</label>
+              <div className={`rounded-xl p-3 sm:p-4 border-2 ${dm ? 'bg-purple-950 border-purple-800' : 'bg-purple-50 border-purple-200'}`}>
+                <label className={`block text-xs sm:text-sm font-medium mb-2 flex items-center gap-2 ${dm ? 'text-purple-300' : 'text-purple-900'}`}>
+                  <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />Teacher Registration Code *
+                </label>
                 <input type="text" value={teacherCode} onChange={e => { setTeacherCode(e.target.value.toUpperCase()); setError(''); }} placeholder="Enter teacher code" required
-                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition bg-white text-sm sm:text-base" maxLength={20} />
-                <p className="text-[10px] sm:text-xs text-purple-700 mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" />Contact administration to get the teacher registration code</p>
+                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition text-sm sm:text-base ${dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-purple-300 text-gray-900'}`} maxLength={20} />
+                <p className={`text-[10px] sm:text-xs mt-2 flex items-center gap-1 ${dm ? 'text-purple-400' : 'text-purple-700'}`}>
+                  <AlertCircle className="w-3 h-3" />Contact administration to get the teacher registration code
+                </p>
               </div>
             )}
 
             {[
-              { field: 'name', label: 'Full Name', type: 'text', placeholder: 'John Doe', icon: UserIcon },
-              { field: 'email', label: 'Email Address', type: 'email', placeholder: 'you@example.com', icon: Mail },
+              { field: 'name',  label: 'Full Name',     type: 'text',  placeholder: 'John Doe',           icon: UserIcon },
+              { field: 'email', label: 'Email Address', type: 'email', placeholder: 'you@example.com',     icon: Mail    },
             ].map(({ field, label, type, placeholder, icon: Icon }) => (
               <div key={field}>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">{label}</label>
+                <label className={`block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>{label}</label>
                 <div className="relative">
                   <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                   <input type={type} value={(formData as any)[field]} onChange={e => handleChange(field as keyof FormData, e.target.value)} placeholder={placeholder} required
-                    className="w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition text-sm sm:text-base" />
+                    className={`w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition text-sm sm:text-base ${dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-200 text-gray-900'}`} />
                 </div>
               </div>
             ))}
 
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Password</label>
+              <label className={`block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                 <input type={showPassword ? 'text' : 'password'} value={formData.password} onChange={e => handleChange('password', e.target.value)} placeholder="Create a strong password" required minLength={6}
-                  className="w-full pl-10 sm:pl-11 pr-12 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition text-sm sm:text-base" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  className={`w-full pl-10 sm:pl-11 pr-12 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition text-sm sm:text-base ${dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-200 text-gray-900'}`} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300">
                   {showPassword ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5" />}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Confirm Password</label>
+              <label className={`block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Confirm Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                 <input type={showPassword ? 'text' : 'password'} value={formData.confirmPassword} onChange={e => handleChange('confirmPassword', e.target.value)} placeholder="Confirm your password" required
-                  className="w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition text-sm sm:text-base" />
+                  className={`w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition text-sm sm:text-base ${dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-200 text-gray-900'}`} />
               </div>
             </div>
 
             <label className="flex items-start gap-2 cursor-pointer">
-              <input type="checkbox" checked={agreedToTerms} onChange={e => setAgreedToTerms(e.target.checked)} className="w-4 h-4 mt-0.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
-              <span className="text-xs sm:text-sm text-gray-600">I agree to the Terms of Service and Privacy Policy</span>
+              <input type="checkbox" checked={agreedToTerms} onChange={e => setAgreedToTerms(e.target.checked)}
+                className={`w-4 h-4 mt-0.5 rounded text-purple-600 focus:ring-purple-500 ${dm ? 'border-gray-600' : 'border-gray-300'}`} />
+              <span className={`text-xs sm:text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>I agree to the Terms of Service and Privacy Policy</span>
             </label>
 
             <button type="submit" disabled={loading}
@@ -330,9 +476,9 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
             </button>
           </form>
 
-          <p className="text-center text-xs sm:text-sm text-gray-600 mt-5 sm:mt-6">
+          <p className={`text-center text-xs sm:text-sm mt-5 sm:mt-6 ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
             Already have an account?{' '}
-            <button onClick={onSwitchToLogin} className="text-purple-600 hover:text-purple-700 font-semibold">Sign in</button>
+            <button onClick={onSwitchToLogin} className={`font-semibold ${dm ? 'text-purple-400 hover:text-purple-300' : 'text-purple-600 hover:text-purple-700'}`}>Sign in</button>
           </p>
         </div>
       </div>
@@ -340,7 +486,7 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void 
   );
 };
 
-// ─── User Dropdown Menu ───────────────────────────────────────────────────────
+// ─── User Dropdown Menu ────────────────────────────────────────────────────────
 function UserMenu({ session, darkMode, toggleDarkMode, onEditProfile, onSettings, onSwitchTeacher, onLogout, userProfile }: any) {
   const dm = darkMode;
   return (
@@ -349,7 +495,7 @@ function UserMenu({ session, darkMode, toggleDarkMode, onEditProfile, onSettings
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0">
             {userProfile?.avatar
-              ? <img src={userProfile.avatar} alt={session.user?.name || ''} className="w-full h-full object-cover" />
+              ? <img src={userProfile.avatar} alt="" className="w-full h-full object-cover" />
               : <span className="text-white font-bold text-base sm:text-lg">{session.user?.name?.[0]}</span>}
           </div>
           <div className="flex-1 min-w-0">
@@ -358,7 +504,6 @@ function UserMenu({ session, darkMode, toggleDarkMode, onEditProfile, onSettings
           </div>
         </div>
       </div>
-
       {[
         { icon: Edit, label: 'Edit Profile', onClick: onEditProfile },
         { icon: Settings, label: 'Settings', onClick: onSettings },
@@ -368,46 +513,41 @@ function UserMenu({ session, darkMode, toggleDarkMode, onEditProfile, onSettings
           <Icon className="w-4 h-4" />{label}
         </button>
       ))}
-
       <button onClick={toggleDarkMode}
         className={`w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors ${dm ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}>
         {dm ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         {dm ? 'Light Mode' : 'Dark Mode'}
       </button>
-
       <div className={`my-1 border-t ${dm ? 'border-gray-700' : 'border-gray-200'}`} />
-
       {session?.user?.role === 'TEACHER' && (
         <button onClick={onSwitchTeacher}
           className={`w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors ${dm ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}>
           <UserCheck className="w-4 h-4" />Teacher View
         </button>
       )}
-
       <button onClick={onLogout}
-        className={`w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-red-600 transition-colors ${dm ? 'hover:bg-red-900/20' : 'hover:bg-red-50'}`}>
+        className={`w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-red-500 transition-colors ${dm ? 'hover:bg-red-900/20' : 'hover:bg-red-50'}`}>
         <LogOut className="w-4 h-4" />Logout
       </button>
     </div>
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main Component ────────────────────────────────────────────────────────────
 const ProtectedLanding = () => {
   const { data: session, status, update } = useSession();
   const router = useRouter();
-  const [authScreen, setAuthScreen] = useState<'login' | 'register' | null>(null);
+  const [authScreen, setAuthScreen]       = useState<'login' | 'register' | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [scrolled, setScrolled]           = useState(false);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [currentScreen, setCurrentScreen] = useState('home');
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [showUserMenu, setShowUserMenu]   = useState(false);
+  const [darkMode, setDarkMode]           = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const [showSettings, setShowSettings]   = useState(false);
+  const [userProfile, setUserProfile]     = useState<any>(null);
 
-  // ── Dark mode: read from localStorage + sync class ──
   useEffect(() => {
     const saved = localStorage.getItem('darkMode') === 'true';
     setDarkMode(saved);
@@ -447,33 +587,49 @@ const ProtectedLanding = () => {
   const handleProfileUpdate = async (data: any) => { setUserProfile(data); await update(); };
 
   const platformFeatures = [
-    { id: 'notes', icon: BookOpen, title: 'Study Notes Library', description: 'Access comprehensive study materials and notes shared by expert teachers', color: 'from-blue-500 to-cyan-500', stats: '1000+ Notes Available', tag: 'Most Popular', component: <NotesLibrary /> },
-    { id: 'assignments', icon: FileText, title: 'Smart Assignments', description: 'AI-powered assignment system with automatic grading and detailed feedback', color: 'from-purple-500 to-pink-500', stats: '10K+ Completed', tag: 'Top Rated', component: <StudentAssignmentDashboard /> },
-    { id: 'study-planner', icon: Brain, title: 'AI Study Planner', description: 'Get personalized study schedules based on your goals, pace, and performance', color: 'from-indigo-500 to-purple-500', stats: '95% Success Rate', tag: 'AI Powered', component: <StudyPlanner /> },
-    { id: 'teacher', icon: UserCheck, title: 'Teacher Dashboard', description: 'Comprehensive management tools for educators to track and mentor students', color: 'from-orange-500 to-red-500', stats: '200+ Teachers', tag: 'Professional', component: <TeacherInterface /> },
-    { id: 'quizzes', icon: Target, title: 'Practice & Mock Tests', description: 'Unlimited quizzes with instant AI evaluation and performance analytics', color: 'from-green-500 to-teal-500', stats: '50K+ Questions', tag: 'Exam Ready', component: <QuizInterface /> },
-    { id: 'videos', icon: Play, title: 'Video Library', description: 'Access thousands of high-quality recorded lectures available 24/7', color: 'from-rose-500 to-pink-500', stats: '1M+ Hours Watched', tag: 'On Demand', component: <VideoPlayer /> },
-    { id: 'doubts', icon: MessageSquare, title: 'Instant Doubt Solving', description: 'Get answers from AI tutor instantly or connect with expert mentors', color: 'from-yellow-500 to-orange-500', stats: '24/7 Available', tag: 'Always Active', component: <DoubtComponent /> },
-    { id: 'payments', icon: CreditCard, title: 'Secure Payments', description: 'Safe and encrypted payment gateway with multiple payment options', color: 'from-emerald-500 to-green-500', stats: 'Bank-Level Security', tag: 'Protected', component: <PaymentDemo /> },
+    { id: 'notes',        icon: BookOpen,    title: 'Study Notes Library',    description: 'Access comprehensive study materials and notes shared by expert teachers',          color: 'from-blue-500 to-cyan-500',    stats: '1000+ Notes Available', tag: 'Most Popular',  component: <NotesLibrary /> },
+    { id: 'assignments',  icon: FileText,    title: 'Smart Assignments',       description: 'AI-powered assignment system with automatic grading and detailed feedback',         color: 'from-purple-500 to-pink-500',  stats: '10K+ Completed',        tag: 'Top Rated',     component: <StudentAssignmentDashboard /> },
+    { id: 'study-planner',icon: Brain,       title: 'AI Study Planner',        description: 'Get personalized study schedules based on your goals, pace, and performance',       color: 'from-indigo-500 to-purple-500',stats: '95% Success Rate',       tag: 'AI Powered',    component: <StudyPlanner /> },
+    { id: 'teacher',      icon: UserCheck,   title: 'Teacher Dashboard',       description: 'Comprehensive management tools for educators to track and mentor students',         color: 'from-orange-500 to-red-500',   stats: '200+ Teachers',         tag: 'Professional',  component: <TeacherInterface /> },
+    { id: 'quizzes',      icon: Target,      title: 'Practice & Mock Tests',   description: 'Unlimited quizzes with instant AI evaluation and performance analytics',            color: 'from-green-500 to-teal-500',   stats: '50K+ Questions',        tag: 'Exam Ready',    component: <QuizInterface /> },
+    { id: 'videos',       icon: Play,        title: 'Video Library',           description: 'Access thousands of high-quality recorded lectures available 24/7',                  color: 'from-rose-500 to-pink-500',    stats: '1M+ Hours Watched',     tag: 'On Demand',     component: <VideoPlayer /> },
+    { id: 'doubts',       icon: MessageSquare,title:'Instant Doubt Solving',   description: 'Get answers from AI tutor instantly or connect with expert mentors',                color: 'from-yellow-500 to-orange-500',stats: '24/7 Available',        tag: 'Always Active', component: <DoubtComponent /> },
+    { id: 'payments',     icon: CreditCard,  title: 'Secure Payments',         description: 'Safe and encrypted payment gateway with multiple payment options',                  color: 'from-emerald-500 to-green-500',stats: 'Bank-Level Security',   tag: 'Protected',     component: <PaymentDemo /> },
   ];
 
   const stats = [
     { value: '50K+', label: 'Active Students', icon: Users },
-    { value: '95%', label: 'Success Rate', icon: Trophy },
+    { value: '95%',  label: 'Success Rate',    icon: Trophy },
     { value: '200+', label: 'Expert Teachers', icon: GraduationCap },
-    { value: '24/7', label: 'Support', icon: Clock },
+    { value: '24/7', label: 'Support',         icon: Clock },
   ];
 
+  // ── FIX 5: Testimonials with real images from public folder ──
   const testimonials = [
-    { name: 'Tanzeel', role: 'JEE Aspirant', image: 'RS', text: 'It is not just an ordinary coaching centre. It is very different. where every teacher is fully dedicated to teach the students. I know the teachers personally. It is more then so call worth it.....', rating: 5, course: 'JEE Mains 2025' },
-    { name: 'Amit Sharma', role: 'Student', image: 'PP', text: 'Best institute for all subjects 👌', rating: 5, course: 'NEET 2024' },
-    { name: 'Yash', role: 'Student', image: 'AK', text: "I’ve had a fantastic experience at this institute. The faculty is highly knowledgeable and always willing to go the extra mile to ensure students understand the concepts. The study material is well-structured, and the learning environment is very encouraging. Highly recommended for anyone looking to excel in their studies!", rating: 5, course: 'JEE Mains 2024' },
+    {
+      name: 'Tanzeel', role: 'JEE Aspirant', image: '/testimonials/student1.jpg', initials: 'T',
+      text: 'It is not just an ordinary coaching centre. It is very different. where every teacher is fully dedicated to teach the students. I know the teachers personally. It is more then so call worth it.....',
+      rating: 5, course: 'JEE Mains 2025',
+    },
+    {
+      name: 'Amit Sharma', role: 'Student', image: '/testimonials/student2.jpg', initials: 'AS',
+      text: 'Best institute for all subjects 👌',
+      rating: 5, course: 'NEET 2024',
+    },
+    {
+      name: 'Yash', role: 'Student', image: '/testimonials/student3.jpg', initials: 'Y',
+      text: "I've had a fantastic experience at this institute. The faculty is highly knowledgeable and always willing to go the extra mile to ensure students understand the concepts. Highly recommended for anyone looking to excel in their studies!",
+      rating: 5, course: 'JEE Mains 2024',
+    },
   ];
 
   const benefits = [
-    { icon: Shield, text: 'Industry-leading security' }, { icon: Globe, text: 'Learn from anywhere' },
-    { icon: Award, text: 'Certified courses' }, { icon: Headphones, text: '24/7 support' },
-    { icon: Lock, text: 'Privacy guaranteed' }, { icon: Zap, text: 'Instant access' },
+    { icon: Shield,    text: 'Industry-leading security' },
+    { icon: Globe,     text: 'Learn from anywhere'       },
+    { icon: Award,     text: 'Certified courses'         },
+    { icon: Headphones,text: '24/7 support'              },
+    { icon: Lock,      text: 'Privacy guaranteed'        },
+    { icon: Zap,       text: 'Instant access'            },
   ];
 
   const openFeature = (id: string) => { if (!session) { setAuthScreen('register'); return; } setCurrentScreen(id); };
@@ -483,20 +639,20 @@ const ProtectedLanding = () => {
   const userMenuProps = {
     session, darkMode, toggleDarkMode,
     onEditProfile: () => { setShowEditProfile(true); setShowUserMenu(false); setMobileMenuOpen(false); },
-    onSettings: () => { setShowSettings(true); setShowUserMenu(false); setMobileMenuOpen(false); },
+    onSettings:    () => { setShowSettings(true);    setShowUserMenu(false); setMobileMenuOpen(false); },
     onSwitchTeacher: () => { router.push('/teacher'); setShowUserMenu(false); setMobileMenuOpen(false); },
     onLogout: () => { handleLogout(); setMobileMenuOpen(false); },
     userProfile,
   };
 
-  if (authScreen === 'login') return <LoginPage onSwitchToRegister={() => setAuthScreen('register')} onBack={() => setAuthScreen(null)} />;
-  if (authScreen === 'register') return <RegisterPage onSwitchToLogin={() => setAuthScreen('login')} onBack={() => setAuthScreen(null)} />;
+  // Pass darkMode into auth pages so they render correctly
+  if (authScreen === 'login')    return <LoginPage    onSwitchToRegister={() => setAuthScreen('register')} onBack={() => setAuthScreen(null)} darkMode={dm} />;
+  if (authScreen === 'register') return <RegisterPage onSwitchToLogin={() => setAuthScreen('login')}       onBack={() => setAuthScreen(null)} darkMode={dm} />;
 
-  // ── Feature Screen ──
+  // ── Feature Screen ────────────────────────────────────────────────────────
   if (currentScreen !== 'home' && currentFeature && session) {
     return (
       <div className={`min-h-screen transition-colors ${dm ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
-        {/* Feature nav */}
         <nav className={`sticky top-0 z-50 shadow-lg ${dm ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-lg`}>
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-3">
@@ -507,7 +663,6 @@ const ProtectedLanding = () => {
                 </div>
                 <span className="hidden sm:inline text-sm sm:text-base">Back to Home</span>
               </button>
-
               <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 justify-center">
                 <div className={`w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-br ${currentFeature.color} rounded-xl flex items-center justify-center shadow-lg flex-shrink-0`}>
                   <currentFeature.icon className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-white" />
@@ -517,18 +672,15 @@ const ProtectedLanding = () => {
                   <p className={`text-xs truncate ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{currentFeature.description}</p>
                 </div>
               </div>
-
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={toggleDarkMode}
                   className={`p-2 rounded-xl hover:scale-110 transition-all ${dm ? 'bg-gray-700 text-yellow-400' : 'bg-gray-100 text-gray-600'}`}>
                   {dm ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
                 </button>
-
                 <button onClick={goHome} className="hidden md:flex items-center gap-2">
                   <div className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center"><CoachingLogo /></div>
                   <span className={`font-bold text-base lg:text-xl ${dm ? 'text-gray-100' : 'text-gray-900'}`}>Intense Learners</span>
                 </button>
-
                 <div className="relative">
                   <button onClick={() => setShowUserMenu(!showUserMenu)}
                     className="flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 sm:px-4 py-2 rounded-xl font-semibold hover:shadow-lg transition-all text-xs sm:text-sm">
@@ -542,7 +694,6 @@ const ProtectedLanding = () => {
           </div>
         </nav>
 
-        {/* Feature content */}
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           <div className={`rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <div className={`bg-gradient-to-r ${currentFeature.color} p-4 sm:p-6 lg:p-8`}>
@@ -550,9 +701,7 @@ const ProtectedLanding = () => {
                 <div>
                   <div className="flex flex-wrap items-center gap-2 mb-1 sm:mb-2">
                     <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">{currentFeature.title}</h2>
-                    {currentFeature.tag && (
-                      <span className="bg-white/20 text-white px-2.5 py-0.5 rounded-full text-xs font-bold">{currentFeature.tag}</span>
-                    )}
+                    {currentFeature.tag && <span className="bg-white/20 text-white px-2.5 py-0.5 rounded-full text-xs font-bold">{currentFeature.tag}</span>}
                   </div>
                   <p className="text-white/90 text-xs sm:text-sm lg:text-base">{currentFeature.description}</p>
                 </div>
@@ -561,11 +710,7 @@ const ProtectedLanding = () => {
                 </div>
               </div>
             </div>
-
-            <div className="p-0">
-              {currentFeature.component}
-            </div>
-
+            <div className="p-0">{currentFeature.component}</div>
             <div className={`p-4 sm:p-6 border-t-2 ${dm ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
               <button onClick={goHome} className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-semibold transition-colors text-sm sm:text-base">
                 <Home className="w-4 h-4 sm:w-5 sm:h-5" />Return to Dashboard
@@ -575,36 +720,30 @@ const ProtectedLanding = () => {
         </div>
 
         {showEditProfile && <EditProfileModal isOpen={showEditProfile} onClose={() => setShowEditProfile(false)} userProfile={userProfile} onUpdate={handleProfileUpdate} darkMode={dm} />}
-        {showSettings && <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} darkMode={dm} onDarkModeToggle={toggleDarkMode} />}
+        {showSettings    && <SettingsModal    isOpen={showSettings}    onClose={() => setShowSettings(false)}    darkMode={dm} onDarkModeToggle={toggleDarkMode} />}
       </div>
     );
   }
 
-  // ── Home / Landing Screen ──
+  // ── Home / Landing Screen ──────────────────────────────────────────────────
   return (
     <div className={`min-h-screen transition-colors ${dm ? 'bg-gray-900' : 'bg-white'}`}>
 
       {/* ── Navbar ── */}
-      <nav className={`fixed w-full z-50 transition-all duration-300 ${
-        scrolled ? `${dm ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-lg shadow-lg py-2 sm:py-3` : 'bg-transparent py-3 sm:py-4'
-      }`}>
+      <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? `${dm ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-lg shadow-lg py-2 sm:py-3` : 'bg-transparent py-3 sm:py-4'}`}>
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            {/* Logo */}
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-              <div className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center">
-                <CoachingLogo />
-              </div>
+              <div className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center"><CoachingLogo /></div>
               <div>
                 <span className={`text-base sm:text-xl lg:text-2xl font-bold ${scrolled ? (dm ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`}>Intense Learners</span>
                 <div className={`text-[10px] sm:text-xs hidden sm:block ${scrolled ? (dm ? 'text-gray-400' : 'text-gray-600') : 'text-purple-200'}`}>Learn with intensity</div>
               </div>
             </div>
 
-            {/* Desktop Nav */}
             <div className="hidden lg:flex items-center gap-6 xl:gap-8">
               {[
-                { href: '#platform', label: 'Features' },
+                { href: '#platform',     label: 'Features'       },
                 ...(!session ? [{ href: '#how-it-works', label: 'How It Works' }] : []),
                 { href: '#testimonials', label: 'Success Stories' },
               ].map(({ href, label }) => (
@@ -613,12 +752,10 @@ const ProtectedLanding = () => {
                   {label}
                 </a>
               ))}
-
               <button onClick={toggleDarkMode}
                 className={`p-2 rounded-xl hover:scale-110 transition-all ${scrolled ? (dm ? 'bg-gray-700 text-yellow-400' : 'bg-gray-100 text-gray-600') : 'bg-white/15 text-white hover:bg-white/25'}`}>
                 {dm ? <Sun className="w-4 h-4 lg:w-5 lg:h-5" /> : <Moon className="w-4 h-4 lg:w-5 lg:h-5" />}
               </button>
-
               {session ? (
                 <div className="relative">
                   <button onClick={() => setShowUserMenu(!showUserMenu)}
@@ -635,7 +772,6 @@ const ProtectedLanding = () => {
               )}
             </div>
 
-            {/* Mobile: dark toggle + hamburger */}
             <div className="flex lg:hidden items-center gap-1.5 sm:gap-2">
               <button onClick={toggleDarkMode}
                 className={`p-2 rounded-lg transition-all ${scrolled ? (dm ? 'bg-gray-700 text-yellow-400' : 'bg-gray-100 text-gray-600') : 'bg-white/15 text-white hover:bg-white/25'}`}>
@@ -643,32 +779,30 @@ const ProtectedLanding = () => {
               </button>
               <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 rounded-lg hover:bg-gray-100/10 transition-colors">
                 {mobileMenuOpen
-                  ? <X className={`w-5 h-5 sm:w-6 sm:h-6 ${scrolled ? (dm ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`} />
+                  ? <X    className={`w-5 h-5 sm:w-6 sm:h-6 ${scrolled ? (dm ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`} />
                   : <Menu className={`w-5 h-5 sm:w-6 sm:h-6 ${scrolled ? (dm ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`} />}
               </button>
             </div>
           </div>
 
-          {/* Mobile Menu */}
           {mobileMenuOpen && (
             <div className={`lg:hidden mt-3 sm:mt-4 rounded-2xl shadow-2xl p-4 sm:p-6 border ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
               <div className="flex flex-col gap-3 sm:gap-4">
                 {[
-                  { href: '#platform', label: 'Features' },
+                  { href: '#platform',     label: 'Features'       },
                   ...(!session ? [{ href: '#how-it-works', label: 'How It Works' }] : []),
                   { href: '#testimonials', label: 'Success Stories' },
                 ].map(({ href, label }) => (
                   <a key={label} href={href} onClick={() => setMobileMenuOpen(false)}
                     className={`font-medium py-1.5 text-sm sm:text-base ${dm ? 'text-gray-200 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'}`}>{label}</a>
                 ))}
-
                 {session ? (
                   <>
                     <div className={`border-t pt-3 sm:pt-4 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0">
                           {userProfile?.avatar
-                            ? <img src={userProfile.avatar} alt={session.user?.name || ''} className="w-full h-full object-cover" />
+                            ? <img src={userProfile.avatar} alt="" className="w-full h-full object-cover" />
                             : <span className="text-white font-bold">{session.user?.name?.[0]}</span>}
                         </div>
                         <div className="min-w-0">
@@ -692,7 +826,7 @@ const ProtectedLanding = () => {
                         <UserCheck className="w-4 h-4" />Teacher View
                       </button>
                     )}
-                    <button onClick={handleLogout} className="flex items-center gap-2 text-red-600 hover:text-red-700 font-medium py-1.5 text-sm sm:text-base">
+                    <button onClick={handleLogout} className="flex items-center gap-2 text-red-500 hover:text-red-400 font-medium py-1.5 text-sm sm:text-base">
                       <LogOut className="w-4 h-4" />Logout
                     </button>
                   </>
@@ -710,7 +844,7 @@ const ProtectedLanding = () => {
 
       {/* Modals */}
       {showEditProfile && <EditProfileModal isOpen={showEditProfile} onClose={() => setShowEditProfile(false)} userProfile={userProfile} onUpdate={handleProfileUpdate} darkMode={dm} />}
-      {showSettings && <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} darkMode={dm} onDarkModeToggle={toggleDarkMode} />}
+      {showSettings    && <SettingsModal    isOpen={showSettings}    onClose={() => setShowSettings(false)}    darkMode={dm} onDarkModeToggle={toggleDarkMode} />}
 
       {/* ── Hero ── */}
       <div className="relative bg-gradient-to-br from-indigo-950 via-purple-900 to-pink-900 overflow-hidden pt-20 pb-12 sm:pt-28 sm:pb-16 lg:pt-32 lg:pb-28">
@@ -725,16 +859,13 @@ const ProtectedLanding = () => {
                 <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400" />
                 <span className="font-semibold">India's Most Advanced AI Learning Platform</span>
               </div>
-
               <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-4 sm:mb-6 leading-tight">
                 Learn with
                 <span className="block bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-400 bg-clip-text text-transparent mt-1 sm:mt-2">Intensity</span>
               </h1>
-
               <p className="text-sm sm:text-base lg:text-xl text-purple-100 mb-6 sm:mb-8 leading-relaxed max-w-2xl mx-auto lg:mx-0">
                 Join 50,000+ students achieving their dreams with personalized AI study plans, live expert classes, and 24/7 intelligent support.
               </p>
-
               <div className="flex flex-col xs:flex-row gap-3 sm:gap-4 mb-6 sm:mb-10 justify-center lg:justify-start">
                 <button onClick={() => session ? openFeature('study-planner') : setAuthScreen('register')}
                   className="group bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-sm sm:text-base lg:text-lg hover:shadow-2xl hover:scale-105 transition-all flex items-center justify-center gap-2">
@@ -746,11 +877,26 @@ const ProtectedLanding = () => {
                 </button>
               </div>
 
+              {/* ── FIX 4: Student images from public folder ── */}
               <div className="flex flex-wrap items-center gap-3 sm:gap-6 justify-center lg:justify-start">
                 <div className="flex -space-x-2 sm:-space-x-3">
-                  {[1,2,3,4,5].map(i => (
-                    <div key={i} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 border-2 border-purple-900 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
-                      {String.fromCharCode(64 + i)}
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <div key={i} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-purple-900 overflow-hidden bg-gradient-to-br from-blue-500 to-purple-500 flex-shrink-0">
+                      <Image
+                        src={`/students/student${i}.jpg`}
+                        alt={`Student ${i}`}
+                        width={40}
+                        height={40}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Fallback to letter avatar if image missing
+                          const target = e.currentTarget as HTMLImageElement;
+                          target.style.display = 'none';
+                          if (target.parentElement) {
+                            target.parentElement.innerHTML = `<span class="w-full h-full flex items-center justify-center text-white font-bold text-xs">${String.fromCharCode(64 + i)}</span>`;
+                          }
+                        }}
+                      />
                     </div>
                   ))}
                 </div>
@@ -830,16 +976,8 @@ const ProtectedLanding = () => {
             {platformFeatures.map((feature) => (
               <button key={feature.id} onClick={() => openFeature(feature.id)}
                 className={`group relative rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 hover:border-indigo-500 overflow-hidden text-left w-full ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
-                {!session && (
-                  <div className="absolute top-3 left-3 bg-gray-900/80 text-white p-1.5 rounded-lg">
-                    <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  </div>
-                )}
-                {feature.tag && (
-                  <div className="absolute top-3 right-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold">
-                    {feature.tag}
-                  </div>
-                )}
+                {!session && <div className="absolute top-3 left-3 bg-gray-900/80 text-white p-1.5 rounded-lg"><Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></div>}
+                {feature.tag && <div className="absolute top-3 right-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold">{feature.tag}</div>}
                 <div className={`inline-flex items-center justify-center w-11 h-11 sm:w-14 sm:h-14 lg:w-16 lg:h-16 bg-gradient-to-br ${feature.color} rounded-xl sm:rounded-2xl mb-3 sm:mb-4 lg:mb-5 group-hover:scale-110 transition-transform shadow-lg ${!session ? 'opacity-50' : ''}`}>
                   <feature.icon className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-white" />
                 </div>
@@ -865,7 +1003,7 @@ const ProtectedLanding = () => {
         </div>
       </div>
 
-      {/* ── How It Works (guests only) ── */}
+      {/* ── How It Works ── */}
       {!session && (
         <div id="how-it-works" className="py-14 sm:py-20 lg:py-28 bg-gradient-to-br from-indigo-50 to-purple-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -878,13 +1016,13 @@ const ProtectedLanding = () => {
             <div className="grid sm:grid-cols-3 gap-5 sm:gap-8 lg:gap-12 relative">
               <div className="hidden sm:block absolute top-10 sm:top-12 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600" />
               {[
-                { step: '01', title: 'Create Account', desc: 'Sign up in 30 seconds and tell us your goals', icon: GraduationCap, color: 'from-blue-500 to-cyan-500' },
-                { step: '02', title: 'AI Personalization', desc: 'Get your custom study plan powered by AI', icon: Brain, color: 'from-purple-500 to-pink-500' },
-                { step: '03', title: 'Start Learning', desc: 'Access all features and begin your journey', icon: Zap, color: 'from-orange-500 to-red-500' },
+                { step: '01', title: 'Create Account',    desc: 'Sign up in 30 seconds and tell us your goals',       icon: GraduationCap, color: 'from-blue-500 to-cyan-500'   },
+                { step: '02', title: 'AI Personalization',desc: 'Get your custom study plan powered by AI',            icon: Brain,         color: 'from-purple-500 to-pink-500' },
+                { step: '03', title: 'Start Learning',    desc: 'Access all features and begin your journey',          icon: Zap,           color: 'from-orange-500 to-red-500'  },
               ].map((item, idx) => (
                 <div key={idx} className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 lg:p-8 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-2 border border-gray-200">
-                  <div className={`inline-flex items-center justify-center w-14 h-14 sm:w-18 sm:h-18 lg:w-20 lg:h-20 bg-gradient-to-br ${item.color} rounded-xl sm:rounded-2xl mb-4 sm:mb-6 shadow-lg`}>
-                    <item.icon className="w-7 h-7 sm:w-9 sm:h-9 lg:w-10 lg:h-10 text-white" />
+                  <div className={`inline-flex items-center justify-center w-14 h-14 lg:w-20 lg:h-20 bg-gradient-to-br ${item.color} rounded-xl sm:rounded-2xl mb-4 sm:mb-6 shadow-lg`}>
+                    <item.icon className="w-7 h-7 lg:w-10 lg:h-10 text-white" />
                   </div>
                   <div className="text-4xl sm:text-5xl lg:text-7xl font-bold text-gray-100 mb-2 sm:mb-4">{item.step}</div>
                   <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 mb-2">{item.title}</h3>
@@ -912,9 +1050,23 @@ const ProtectedLanding = () => {
                     {[...Array(t.rating)].map((_, i) => <Star key={i} className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 fill-current" />)}
                   </div>
                   <p className="text-base sm:text-xl lg:text-2xl xl:text-3xl text-white mb-5 sm:mb-8 leading-relaxed font-light">"{t.text}"</p>
+                  {/* ── FIX 5: Testimonial images from public folder ── */}
                   <div className="flex items-center gap-3 sm:gap-4 flex-col sm:flex-row text-center sm:text-left">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-lg sm:text-xl lg:text-2xl shadow-lg flex-shrink-0">
-                      {t.image}
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center flex-shrink-0 shadow-lg">
+                      <Image
+                        src={t.image}
+                        alt={t.name}
+                        width={64}
+                        height={64}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.currentTarget as HTMLImageElement;
+                          target.style.display = 'none';
+                          if (target.parentElement) {
+                            target.parentElement.innerHTML = `<span class="text-white font-bold text-lg sm:text-xl lg:text-2xl">${t.initials}</span>`;
+                          }
+                        }}
+                      />
                     </div>
                     <div>
                       <div className="text-white font-bold text-base sm:text-lg lg:text-xl">{t.name}</div>
@@ -988,22 +1140,27 @@ const ProtectedLanding = () => {
               <p className="text-gray-400 leading-relaxed mb-5 text-xs sm:text-sm lg:text-base">
                 Transforming education through artificial intelligence and expert teaching. Join thousands of students achieving their dreams.
               </p>
+              {/* ── FIX 6: Real social icons using lucide-react ── */}
               <div className="flex gap-3">
-                {['twitter', 'facebook', 'instagram', 'linkedin'].map(s => (
-                  <button key={s} className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-800 hover:bg-indigo-600 rounded-lg flex items-center justify-center transition-colors">
-                    <div className="w-4 h-4 bg-white/20 rounded" />
-                  </button>
+                {Object.entries(socialLinks).map(([platform, url]) => (
+                  <a key={platform} href={url} target="_blank" rel="noopener noreferrer"
+                    className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-800 hover:bg-indigo-600 rounded-lg flex items-center justify-center transition-colors text-gray-400 hover:text-white"
+                    aria-label={platform}>
+                    {socialIcons[platform]}
+                  </a>
                 ))}
               </div>
             </div>
 
             {[
               { title: 'Platform', items: [
-                { label: 'Study Notes', id: 'notes' }, { label: 'Assignments', id: 'assignments' },
-                { label: 'AI Study Planner', id: 'study-planner' }, { label: 'Mock Tests', id: 'quizzes' },
+                { label: 'Study Notes',     id: 'notes'        },
+                { label: 'Assignments',     id: 'assignments'  },
+                { label: 'AI Study Planner',id: 'study-planner'},
+                { label: 'Mock Tests',      id: 'quizzes'      },
               ]},
               { title: 'Resources', links: ['Blog', 'Help Center', 'Community', 'Contact Us'] },
-              { title: 'Legal', links: ['Privacy Policy', 'Terms of Service', 'Cookie Policy', 'Refund Policy'] },
+              { title: 'Legal',     links: ['Privacy Policy', 'Terms of Service', 'Cookie Policy', 'Refund Policy'] },
             ].map((col) => (
               <div key={col.title}>
                 <h4 className="font-bold text-sm sm:text-base lg:text-lg mb-3 sm:mb-4">{col.title}</h4>
@@ -1014,14 +1171,13 @@ const ProtectedLanding = () => {
                       ))
                     : (col as any).links?.map((l: string) => (
                         <li key={l}><a href="#" className="hover:text-white transition-colors">{l}</a></li>
-                      ))
-                  }
+                      ))}
                 </ul>
               </div>
             ))}
           </div>
 
-          <div className={`border-t border-gray-800 pt-5 sm:pt-8`}>
+          <div className="border-t border-gray-800 pt-5 sm:pt-8">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4 text-xs sm:text-sm">
               <p className="text-gray-400 text-center sm:text-left">© 2026 Intense Learners Technologies Pvt. Ltd. All rights reserved.</p>
               <div className="flex flex-wrap gap-2 sm:gap-6 text-gray-400 text-center justify-center">
