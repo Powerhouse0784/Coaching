@@ -642,3 +642,16 @@ model AIAssistantMessage {
   @@index([createdAt])
   @@index([isAI])
 }
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  email     String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("password_reset_tokens")
+  @@index([email])
+  @@index([token])
+}
