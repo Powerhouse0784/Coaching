@@ -59,6 +59,7 @@ model User {
   avatar     String?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
+  paymentOrders   PaymentOrder[]
   updatedAt  DateTime @updatedAt
   chatMessages TeacherChatMessage[] @relation("UserChatMessages")
   iMessages   AIAssistantMessage[] @relation("UserAIMessages")     // AI Assistant (NEW!)
@@ -654,4 +655,42 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
   @@index([email])
   @@index([token])
+}
+
+model PaymentOrder {
+  id              String   @id @default(uuid())
+  orderId         String   @unique   // Razorpay order ID
+  paymentId       String?            // Razorpay payment ID (after success)
+  signature       String?
+  amount          Int                // in rupees
+  currency        String   @default("INR")
+  status          String   @default("pending") // pending | paid | failed
+  couponCode      String?
+  couponDiscount  Int      @default(0)
+  deliveryAddress Json?              // for hardcopy orders
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  items           PaymentOrderItem[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+ 
+  @@map("payment_orders")
+  @@index([userId])
+  @@index([status])
+}
+ 
+model PaymentOrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     PaymentOrder @relation(fields: [orderId], references: [id])
+  type      String   // fee | hardcopy
+  refId     String   // planId or noteId
+  name      String
+  qty       Int      @default(1)
+  unitPrice Int
+  total     Int
+  createdAt DateTime @default(now())
+ 
+  @@map("payment_order_items")
+  @@index([orderId])
 }
