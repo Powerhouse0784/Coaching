@@ -63,6 +63,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function PUT(req: NextRequest) {
+  const { messageId, content } = await req.json();
+  const updated = await prisma.teacherChatMessage.update({
+    where: { id: messageId },
+    data: { content, updatedAt: new Date() },
+  });
+  return NextResponse.json({ success: true, message: updated });
+}
+
 // POST - Send new message
 export async function POST(req: NextRequest) {
   try {

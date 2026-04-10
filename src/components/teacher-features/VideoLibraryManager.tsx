@@ -1,9 +1,3 @@
-// COMPLETE UPDATED Teacher Video Library Manager
-// ✅ FIXED: Proper UploadThing imports and TypeScript types
-// ✅ Uses UploadThing for thumbnails (cloud storage)
-// ✅ Uses Puter.js for videos (unlimited cloud storage)
-// ✅ Works on both localhost and Vercel
-// ✅ All modals are INSIDE this component (no separate files needed)
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -14,8 +8,6 @@ import {
   FileVideo, MoreVertical, Globe, Lock, Pause, Volume2, VolumeX,
   Maximize, Minimize, Settings, SkipForward, SkipBack, Loader, Image as ImageIcon
 } from 'lucide-react';
-
-// ✅ FIXED: Proper dynamic import for UploadThing (client-side only)
 import { useUploadThing } from '@/lib/uploadthing';
 
 interface VideoFolder {
@@ -32,10 +24,10 @@ interface VideoFolder {
   totalWatchTime: string;
   createdAt: string;
   isPublic: boolean;
-  videos: Video[];
+  videos: VideoItem[];
 }
 
-interface Video {
+interface VideoItem {
   id: string;
   title: string;
   description: string;
@@ -50,727 +42,581 @@ interface Video {
   quality: string;
 }
 
-export default function VideoLibraryManager() {
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
-  const [showUploadVideoModal, setShowUploadVideoModal] = useState(false);
-  const [showEditFolderModal, setShowEditFolderModal] = useState(false);
-  const [showEditVideoModal, setShowEditVideoModal] = useState(false);
-  const [showVideoPlayer, setShowVideoPlayer] = useState(false);
-  const [selectedFolder, setSelectedFolder] = useState<VideoFolder | null>(null);
-  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
-  const [editingFolder, setEditingFolder] = useState<VideoFolder | null>(null);
-  const [editingVideo, setEditingVideo] = useState<Video | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [folders, setFolders] = useState<VideoFolder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [folderMenuOpen, setFolderMenuOpen] = useState<string | null>(null);
-
+// ── Dark mode hook ────────────────────────────────────────────────────────────
+function useDarkMode() {
+  const [dm, setDm] = useState(false);
   useEffect(() => {
-    fetchFolders();
+    const check = () => setDm(document.documentElement.classList.contains('dark'));
+    check();
+    const obs = new MutationObserver(check);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+  return dm;
+}
+
+// ── Shared style helpers ──────────────────────────────────────────────────────
+function useS(dm: boolean) {
+  return {
+    page:   dm ? 'bg-gray-900'  : '',
+    card:   `rounded-xl border ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`,
+    card2:  `rounded-xl border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`,
+    input:  `w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition text-sm sm:text-base ${
+              dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900'
+            }`,
+    label:  `block text-xs sm:text-sm font-medium mb-1.5 ${dm ? 'text-gray-300' : 'text-gray-700'}`,
+    tp:     dm ? 'text-white'    : 'text-gray-900',
+    tm:     dm ? 'text-gray-400' : 'text-gray-600',
+    ts:     dm ? 'text-gray-500' : 'text-gray-500',
+    chip:   dm ? 'bg-gray-700'   : 'bg-gray-50',
+    modal:  `rounded-t-2xl sm:rounded-2xl w-full shadow-2xl flex flex-col ${dm ? 'bg-gray-900' : 'bg-white'}`,
+    mhdr:   `p-4 sm:p-6 border-b-2 flex items-center justify-between flex-shrink-0 ${dm ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`,
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+export default function VideoLibraryManager() {
+  const dm = useDarkMode();
+  const s  = useS(dm);
+
+  const [viewMode,               setViewMode]               = useState<'grid' | 'list'>('grid');
+  const [showCreateFolderModal,  setShowCreateFolderModal]  = useState(false);
+  const [showUploadVideoModal,   setShowUploadVideoModal]   = useState(false);
+  const [showEditFolderModal,    setShowEditFolderModal]    = useState(false);
+  const [showEditVideoModal,     setShowEditVideoModal]     = useState(false);
+  const [showVideoPlayer,        setShowVideoPlayer]        = useState(false);
+  const [selectedFolder,         setSelectedFolder]         = useState<VideoFolder | null>(null);
+  const [selectedVideo,          setSelectedVideo]          = useState<VideoItem | null>(null);
+  const [editingFolder,          setEditingFolder]          = useState<VideoFolder | null>(null);
+  const [editingVideo,           setEditingVideo]           = useState<VideoItem | null>(null);
+  const [searchQuery,            setSearchQuery]            = useState('');
+  const [folders,                setFolders]                = useState<VideoFolder[]>([]);
+  const [loading,                setLoading]                = useState(true);
+  const [uploading,              setUploading]              = useState(false);
+  const [folderMenuOpen,         setFolderMenuOpen]         = useState<string | null>(null);
+
+  useEffect(() => { fetchFolders(); }, []);
+
+  // Close menus on outside click
+  useEffect(() => {
+    const h = () => setFolderMenuOpen(null);
+    document.addEventListener('click', h);
+    return () => document.removeEventListener('click', h);
   }, []);
 
   const fetchFolders = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/teacher/video-folders');
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch folders: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setFolders(data);
-    } catch (error) {
-      console.error('Error fetching folders:', error);
-      alert('Failed to load folders. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+      const res = await fetch('/api/teacher/video-folders');
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      setFolders(await res.json());
+    } catch (e) { console.error(e); alert('Failed to load folders. Please try again.'); }
+    finally { setLoading(false); }
   };
 
-  const totalVideos = folders.reduce((acc, f) => acc + f.videoCount, 0);
-  const totalViews = folders.reduce((acc, f) => acc + f.totalViews, 0);
-  
-  const totalWatchTime = folders.reduce((acc, f) => {
-    if (!f.totalWatchTime) return acc;
-    const timeStr = f.totalWatchTime;
-    const hourMatch = timeStr.match(/(\d+)h/);
-    const minMatch = timeStr.match(/(\d+)m/);
-    const hours = hourMatch ? parseInt(hourMatch[1]) : 0;
-    const mins = minMatch ? parseInt(minMatch[1]) : 0;
-    return acc + (hours * 60) + mins;
+  const totalVideos = folders.reduce((a, f) => a + f.videoCount, 0);
+  const totalViews  = folders.reduce((a, f) => a + f.totalViews,  0);
+  const totalWatchMin = folders.reduce((a, f) => {
+    if (!f.totalWatchTime) return a;
+    const h = f.totalWatchTime.match(/(\d+)h/);
+    const m = f.totalWatchTime.match(/(\d+)m/);
+    return a + (h ? +h[1] * 60 : 0) + (m ? +m[1] : 0);
   }, 0);
 
-  const watchTimeHours = Math.floor(totalWatchTime / 60);
-  const watchTimeMins = totalWatchTime % 60;
-
   const stats = [
-    { label: 'Total Folders', value: folders.length.toString(), icon: Folder, color: 'purple' },
-    { label: 'Total Videos', value: totalVideos.toString(), icon: FileVideo, color: 'blue' },
-    { label: 'Total Views', value: totalViews.toLocaleString(), icon: Eye, color: 'green' },
-    { label: 'Watch Time', value: `${watchTimeHours}h ${watchTimeMins}m`, icon: Clock, color: 'orange' },
+    { label: 'Total Folders', value: folders.length, icon: Folder,    color: { bg: dm ? 'bg-purple-900' : 'bg-purple-100', text: dm ? 'text-purple-300' : 'text-purple-600' } },
+    { label: 'Total Videos',  value: totalVideos,     icon: FileVideo, color: { bg: dm ? 'bg-blue-900'   : 'bg-blue-100',   text: dm ? 'text-blue-300'   : 'text-blue-600'   } },
+    { label: 'Total Views',   value: totalViews.toLocaleString(), icon: Eye, color: { bg: dm ? 'bg-green-900' : 'bg-green-100', text: dm ? 'text-green-300' : 'text-green-600' } },
+    { label: 'Watch Time',    value: `${Math.floor(totalWatchMin/60)}h ${totalWatchMin%60}m`, icon: Clock, color: { bg: dm ? 'bg-orange-900' : 'bg-orange-100', text: dm ? 'text-orange-300' : 'text-orange-600' } },
   ];
 
-  const filteredFolders = folders.filter(folder => {
-    const matchesSearch = folder.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         folder.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         folder.chapter.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    return matchesSearch;
-  });
+  const filteredFolders = folders.filter(f =>
+    f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    f.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    f.chapter.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const handleCreateFolder = async (folderData: any) => {
+  const handleCreateFolder = async (data: any) => {
     try {
-      const response = await fetch('/api/teacher/video-folders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: folderData.name,
-          subject: folderData.subject,
-          class: folderData.class,
-          chapter: folderData.chapter,
-          description: folderData.description || '',
-          isPublic: folderData.isPublic,
-          thumbnailUrl: folderData.thumbnailUrl || ''
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create folder');
-      }
-
-      await fetchFolders();
-      setShowCreateFolderModal(false);
-      alert('Folder created successfully!');
-    } catch (error) {
-      console.error('Error creating folder:', error);
-      alert(`Failed to create folder: ${error instanceof Error ? error.message : 'Please try again.'}`);
-    }
+      const res = await fetch('/api/teacher/video-folders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+      await fetchFolders(); setShowCreateFolderModal(false); alert('Folder created successfully!');
+    } catch (e) { alert(`Failed to create folder: ${e instanceof Error ? e.message : 'Please try again.'}`); }
   };
 
-  const handleEditFolder = async (folderId: string, folderData: any) => {
+  const handleEditFolder = async (id: string, data: any) => {
     try {
-      const response = await fetch(`/api/teacher/video-folders/${folderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: folderData.name,
-          subject: folderData.subject,
-          class: folderData.class,
-          chapter: folderData.chapter,
-          description: folderData.description || '',
-          isPublic: folderData.isPublic,
-          thumbnailUrl: folderData.thumbnailUrl || ''
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update folder');
-      }
-
-      await fetchFolders();
-      setShowEditFolderModal(false);
-      setEditingFolder(null);
-      alert('Folder updated successfully!');
-    } catch (error) {
-      console.error('Error updating folder:', error);
-      alert(`Failed to update folder: ${error instanceof Error ? error.message : 'Please try again.'}`);
-    }
+      const res = await fetch(`/api/teacher/video-folders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+      await fetchFolders(); setShowEditFolderModal(false); setEditingFolder(null); alert('Folder updated successfully!');
+    } catch (e) { alert(`Failed to update folder: ${e instanceof Error ? e.message : 'Please try again.'}`); }
   };
 
-  const handleUploadVideo = async (videoData: any) => {
+  const handleUploadVideo = async (data: any) => {
     try {
       setUploading(true);
-      
-      const response = await fetch('/api/teacher/videos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          folderId: videoData.folderId,
-          title: videoData.title,
-          description: videoData.description || '',
-          duration: videoData.duration,
-          videoUrl: videoData.videoUrl,
-          thumbnailUrl: videoData.thumbnailUrl || '',
-          size: videoData.size,
-          quality: videoData.quality || '1080p'
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to upload video');
-      }
-
-      await fetchFolders();
-      setShowUploadVideoModal(false);
-      alert('Video uploaded successfully!');
-    } catch (error) {
-      console.error('Error uploading video:', error);
-      alert(`Failed to upload video: ${error instanceof Error ? error.message : 'Please try again.'}`);
-    } finally {
-      setUploading(false);
-    }
+      const res = await fetch('/api/teacher/videos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+      await fetchFolders(); setShowUploadVideoModal(false); alert('Video uploaded successfully!');
+    } catch (e) { alert(`Failed to upload video: ${e instanceof Error ? e.message : 'Please try again.'}`); }
+    finally { setUploading(false); }
   };
 
-  const handleEditVideo = async (videoId: string, videoData: any) => {
+  const handleEditVideo = async (id: string, data: any) => {
     try {
-      const response = await fetch(`/api/teacher/videos/${videoId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: videoData.title,
-          description: videoData.description || '',
-          thumbnailUrl: videoData.thumbnailUrl || ''
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update video');
-      }
-
-      await fetchFolders();
-      setShowEditVideoModal(false);
-      setEditingVideo(null);
-      alert('Video updated successfully!');
-    } catch (error) {
-      console.error('Error updating video:', error);
-      alert(`Failed to update video: ${error instanceof Error ? error.message : 'Please try again.'}`);
-    }
+      const res = await fetch(`/api/teacher/videos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+      await fetchFolders(); setShowEditVideoModal(false); setEditingVideo(null); alert('Video updated successfully!');
+    } catch (e) { alert(`Failed to update video: ${e instanceof Error ? e.message : 'Please try again.'}`); }
   };
 
-  const handleDeleteFolder = async (folderId: string) => {
-    if (!confirm('Are you sure you want to delete this folder and all its videos?')) {
-      return;
-    }
-
+  const handleDeleteFolder = async (id: string) => {
+    if (!confirm('Delete this folder and all its videos?')) return;
     try {
-      const response = await fetch(`/api/teacher/video-folders/${folderId}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete folder');
-      }
-
-      await fetchFolders();
-      setSelectedFolder(null);
-      alert('Folder deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting folder:', error);
-      alert(`Failed to delete folder: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+      const res = await fetch(`/api/teacher/video-folders/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+      await fetchFolders(); setSelectedFolder(null); alert('Folder deleted successfully!');
+    } catch (e) { alert(`Failed to delete folder: ${e instanceof Error ? e.message : 'Unknown error'}`); }
   };
 
-  const handleDeleteVideo = async (videoId: string) => {
-    if (!confirm('Are you sure you want to delete this video?')) {
-      return;
-    }
-
+  const handleDeleteVideo = async (id: string) => {
+    if (!confirm('Delete this video?')) return;
     try {
-      const response = await fetch(`/api/teacher/videos/${videoId}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete video');
-      }
-
-      await fetchFolders();
-      alert('Video deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting video:', error);
-      alert(`Failed to delete video: ${error instanceof Error ? error.message : 'Please try again.'}`);
-    }
+      const res = await fetch(`/api/teacher/videos/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+      await fetchFolders(); alert('Video deleted successfully!');
+    } catch (e) { alert(`Failed to delete video: ${e instanceof Error ? e.message : 'Please try again.'}`); }
   };
 
-  const handleDownloadVideo = async (video: Video) => {
+  const handleDownloadVideo = async (video: VideoItem) => {
     try {
-      const response = await fetch(video.videoUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const res = await fetch(video.videoUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `${video.title}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Error downloading video:', error);
-      alert('Failed to download video. Please try again.');
-    }
+      a.href = url; a.download = `${video.title}.mp4`;
+      document.body.appendChild(a); a.click();
+      URL.revokeObjectURL(url); document.body.removeChild(a);
+    } catch { alert('Failed to download video.'); }
   };
 
   if (loading) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-screen">
+      <div className={`flex items-center justify-center min-h-[400px] ${s.page}`}>
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading video library...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4" />
+          <p className={`text-sm sm:text-base ${s.tm}`}>Loading video library...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8">
+    <div className={`p-3 sm:p-6 lg:p-8 min-h-screen transition-colors ${s.page}`}>
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6 sm:mb-8">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Video Library Manager</h2>
-          <p className="text-gray-600">Organize and manage your lecture videos by folders</p>
+          <h2 className={`text-2xl sm:text-3xl font-bold mb-1 ${s.tp}`}>Video Library Manager</h2>
+          <p className={`text-sm sm:text-base ${s.tm}`}>Organize and manage your lecture videos by folders</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowCreateFolderModal(true)}
-            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all flex items-center gap-2"
-          >
-            <FolderPlus className="w-5 h-5" />
-            Create Folder
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <button onClick={() => setShowCreateFolderModal(true)}
+            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all flex items-center gap-2 text-sm sm:text-base">
+            <FolderPlus className="w-4 h-4 sm:w-5 sm:h-5" /> Create Folder
           </button>
-          <button
-            onClick={() => setShowUploadVideoModal(true)}
-            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all flex items-center gap-2"
-          >
-            <Upload className="w-5 h-5" />
-            Upload Video
+          <button onClick={() => setShowUploadVideoModal(true)}
+            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all flex items-center gap-2 text-sm sm:text-base">
+            <Upload className="w-4 h-4 sm:w-5 sm:h-5" /> Upload Video
           </button>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat, idx) => (
-          <div key={idx} className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`w-12 h-12 bg-${stat.color}-100 rounded-xl flex items-center justify-center`}>
-                <stat.icon className={`w-6 h-6 text-${stat.color}-600`} />
-              </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-6 mb-6 sm:mb-8">
+        {stats.map(({ label, value, icon: Icon, color }, i) => (
+          <div key={i} className={`${s.card} p-4 sm:p-5 lg:p-6 hover:shadow-lg transition-shadow`}>
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 ${color.bg} rounded-xl flex items-center justify-center mb-3 sm:mb-4`}>
+              <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${color.text}`} />
             </div>
-            <p className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</p>
-            <p className="text-sm text-gray-600">{stat.label}</p>
+            <p className={`text-2xl sm:text-3xl font-bold mb-0.5 ${s.tp}`}>{value}</p>
+            <p className={`text-xs sm:text-sm ${s.tm}`}>{label}</p>
           </div>
         ))}
       </div>
 
-      {/* Search Bar */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-        <div className="flex items-center gap-4">
+      {/* Search + View toggle */}
+      <div className={`${s.card} p-3 sm:p-4 mb-5 sm:mb-6`}>
+        <div className="flex items-center gap-2 sm:gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search folders, videos, subjects..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+            <input type="text" placeholder="Search folders, subjects..." value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className={`w-full pl-9 sm:pl-10 pr-4 py-2.5 border-2 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm ${
+                dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900'
+              }`} />
           </div>
-
-          <button
-            onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
-          >
-            {viewMode === 'grid' ? <LayoutList className="w-5 h-5" /> : <Grid3x3 className="w-5 h-5" />}
+          <button onClick={() => setViewMode(v => v === 'grid' ? 'list' : 'grid')}
+            className={`p-2.5 sm:p-3 rounded-xl transition flex-shrink-0 ${dm ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
+            {viewMode === 'grid' ? <LayoutList className="w-4 h-4 sm:w-5 sm:h-5" /> : <Grid3x3 className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
         </div>
       </div>
 
-      {/* Folders Grid/List */}
-      <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
-        {filteredFolders.map((folder) => (
-          <div
-            key={folder.id}
-            className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-xl transition-all group"
-          >
-            <div
-              onClick={() => setSelectedFolder(folder)}
-              className="h-48 relative cursor-pointer group-hover:scale-105 transition-transform overflow-hidden"
-            >
-              {folder.thumbnail && folder.thumbnail.trim() !== '' ? (
-                <img 
-                  src={folder.thumbnail} 
-                  alt={folder.name} 
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
-                  <Folder className="w-20 h-20 text-white opacity-80" />
-                </div>
-              )}
-              
-              <div className="absolute top-4 right-4 flex items-center gap-2">
-                <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold">
-                  {folder.videoCount} videos
-                </span>
-                {folder.isPublic ? (
-                  <div className="px-3 py-1 bg-green-500/90 backdrop-blur-sm rounded-full flex items-center gap-1">
-                    <Globe className="w-4 h-4 text-white" />
-                    <span className="text-white text-xs font-semibold">Public</span>
-                  </div>
-                ) : (
-                  <div className="px-3 py-1 bg-orange-500/90 backdrop-blur-sm rounded-full flex items-center gap-1">
-                    <Lock className="w-4 h-4 text-white" />
-                    <span className="text-white text-xs font-semibold">Private</span>
-                  </div>
-                )}
-              </div>
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                <Play className="w-16 h-16 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
-
-            <div className="p-6">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <h3 className="font-bold text-gray-900 text-lg mb-1">{folder.name}</h3>
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
-                      {folder.subject}
-                    </span>
-                    <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-semibold">
-                      {folder.class}
-                    </span>
-                    {folder.isPublic ? (
-                      <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-semibold flex items-center gap-1">
-                        <Globe className="w-3 h-3" />
-                        Public
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-semibold flex items-center gap-1">
-                        <Lock className="w-3 h-3" />
-                        Private
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-600 mb-2">{folder.chapter}</p>
-                  <p className="text-sm text-gray-500 line-clamp-2">{folder.description}</p>
-                </div>
-                <div className="relative">
-                  <button 
-                    onClick={() => setFolderMenuOpen(folderMenuOpen === folder.id ? null : folder.id)}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition"
-                  >
-                    <MoreVertical className="w-5 h-5 text-gray-400" />
-                  </button>
-                  
-                  {folderMenuOpen === folder.id && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
-                      <button
-                        onClick={() => {
-                          setEditingFolder(folder);
-                          setShowEditFolderModal(true);
-                          setFolderMenuOpen(null);
-                        }}
-                        className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-sm"
-                      >
-                        <Edit className="w-4 h-4" />
-                        Edit Folder
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedFolder(folder);
-                          setFolderMenuOpen(null);
-                        }}
-                        className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-sm"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View Videos
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleDeleteFolder(folder.id);
-                          setFolderMenuOpen(null);
-                        }}
-                        className="w-full px-4 py-2 text-left hover:bg-red-50 flex items-center gap-2 text-sm text-red-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Delete Folder
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                <div className="bg-gray-50 rounded-lg p-2 text-center">
-                  <p className="text-xs text-gray-600">Videos</p>
-                  <p className="text-lg font-bold text-gray-900">{folder.videoCount}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-2 text-center">
-                  <p className="text-xs text-gray-600">Duration</p>
-                  <p className="text-sm font-bold text-gray-900">{folder.totalDuration}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-2 text-center">
-                  <p className="text-xs text-gray-600">Views</p>
-                  <p className="text-lg font-bold text-gray-900">{folder.totalViews}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSelectedFolder(folder)}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold text-sm flex items-center justify-center gap-2"
-                >
-                  <Eye className="w-4 h-4" />
-                  View Videos
-                </button>
-                <button 
-                  onClick={() => {
-                    setEditingFolder(folder);
-                    setShowEditFolderModal(true);
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  <Edit className="w-4 h-4 text-gray-600" />
-                </button>
-                <button
-                  onClick={() => handleDeleteFolder(folder.id)}
-                  className="px-4 py-2 border border-red-300 rounded-lg hover:bg-red-50 transition"
-                >
-                  <Trash2 className="w-4 h-4 text-red-600" />
-                </button>
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
-                <span>Created {new Date(folder.createdAt).toLocaleDateString()}</span>
-                <span className="text-gray-400">Watch time: {folder.totalWatchTime}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {filteredFolders.length === 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <Folder className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-gray-900 mb-2">No folders found</h3>
-          <p className="text-gray-600 mb-6">Create your first folder to organize lecture videos</p>
-          <button
-            onClick={() => setShowCreateFolderModal(true)}
-            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold"
-          >
+      {/* Folders grid/list */}
+      {filteredFolders.length === 0 ? (
+        <div className={`${s.card2} p-10 sm:p-12 text-center`}>
+          <Folder className={`w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 ${dm ? 'text-gray-600' : 'text-gray-400'}`} />
+          <h3 className={`text-lg sm:text-xl font-bold mb-2 ${s.tp}`}>No folders found</h3>
+          <p className={`text-sm mb-5 ${s.tm}`}>Create your first folder to organize lecture videos</p>
+          <button onClick={() => setShowCreateFolderModal(true)}
+            className="px-5 sm:px-6 py-2.5 sm:py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition font-semibold text-sm sm:text-base">
             Create Folder
           </button>
+        </div>
+      ) : (
+        <div className={viewMode === 'grid'
+          ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6'
+          : 'space-y-3 sm:space-y-4'}>
+          {filteredFolders.map(folder => (
+            <div key={folder.id} className={`${s.card2} overflow-hidden hover:shadow-xl transition-all group`}>
+              {/* Thumbnail */}
+              <div onClick={() => setSelectedFolder(folder)}
+                className="h-40 sm:h-48 relative cursor-pointer overflow-hidden">
+                {folder.thumbnail?.trim()
+                  ? <img src={folder.thumbnail} alt={folder.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  : <div className="w-full h-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                      <Folder className="w-16 h-16 sm:w-20 sm:h-20 text-white opacity-80" />
+                    </div>}
+                <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-xs font-semibold">{folder.videoCount} videos</span>
+                  {folder.isPublic
+                    ? <div className="px-2 py-0.5 bg-green-500/90 rounded-full flex items-center gap-1"><Globe className="w-3 h-3 text-white" /><span className="text-white text-xs font-semibold">Public</span></div>
+                    : <div className="px-2 py-0.5 bg-orange-500/90 rounded-full flex items-center gap-1"><Lock className="w-3 h-3 text-white" /><span className="text-white text-xs font-semibold">Private</span></div>}
+                </div>
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                  <Play className="w-12 h-12 sm:w-16 sm:h-16 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </div>
+
+              {/* Card body */}
+              <div className="p-4 sm:p-5 lg:p-6">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0 pr-2">
+                    <h3 className={`font-bold text-base sm:text-lg mb-1 truncate ${s.tp}`}>{folder.name}</h3>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${dm ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>{folder.subject}</span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${dm ? 'bg-purple-900 text-purple-300' : 'bg-purple-100 text-purple-700'}`}>{folder.class}</span>
+                      {folder.isPublic
+                        ? <span className={`px-2 py-0.5 rounded text-xs font-semibold flex items-center gap-1 ${dm ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-700'}`}><Globe className="w-3 h-3" />Public</span>
+                        : <span className={`px-2 py-0.5 rounded text-xs font-semibold flex items-center gap-1 ${dm ? 'bg-orange-900 text-orange-300' : 'bg-orange-100 text-orange-700'}`}><Lock className="w-3 h-3" />Private</span>}
+                    </div>
+                    <p className={`text-xs sm:text-sm mb-1 ${s.tm}`}>{folder.chapter}</p>
+                    <p className={`text-xs sm:text-sm line-clamp-2 ${s.ts}`}>{folder.description}</p>
+                  </div>
+                  {/* Kebab menu */}
+                  <div className="relative flex-shrink-0" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => setFolderMenuOpen(folderMenuOpen === folder.id ? null : folder.id)}
+                      className={`p-2 rounded-lg transition ${dm ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}>
+                      <MoreVertical className={`w-4 h-4 sm:w-5 sm:h-5 ${s.ts}`} />
+                    </button>
+                    {folderMenuOpen === folder.id && (
+                      <div className={`absolute right-0 mt-2 w-44 sm:w-48 rounded-xl shadow-xl border z-20 overflow-hidden ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                        {[
+                          { icon: Edit,   label: 'Edit Folder',   action: () => { setEditingFolder(folder); setShowEditFolderModal(true); setFolderMenuOpen(null); }, color: '' },
+                          { icon: Eye,    label: 'View Videos',   action: () => { setSelectedFolder(folder); setFolderMenuOpen(null); }, color: '' },
+                          { icon: Trash2, label: 'Delete Folder', action: () => { handleDeleteFolder(folder.id); setFolderMenuOpen(null); }, color: 'text-red-500' },
+                        ].map(({ icon: Icon, label, action, color }) => (
+                          <button key={label} onClick={action}
+                            className={`w-full px-4 py-2.5 text-left flex items-center gap-2 text-xs sm:text-sm transition ${color} ${
+                              color ? (dm ? 'hover:bg-red-900/30' : 'hover:bg-red-50') : (dm ? `hover:bg-gray-700 ${s.tp}` : 'hover:bg-gray-50 text-gray-700')
+                            }`}>
+                            <Icon className="w-4 h-4" />{label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Stats chips */}
+                <div className={`grid grid-cols-3 gap-2 mb-4 pb-4 border-b ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+                  {[
+                    { label: 'Videos',   value: folder.videoCount    },
+                    { label: 'Duration', value: folder.totalDuration },
+                    { label: 'Views',    value: folder.totalViews    },
+                  ].map(({ label, value }) => (
+                    <div key={label} className={`${s.chip} rounded-lg p-2 text-center`}>
+                      <p className={`text-xs ${s.ts} mb-0.5`}>{label}</p>
+                      <p className={`text-sm sm:text-base font-bold ${s.tp}`}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <button onClick={() => setSelectedFolder(folder)}
+                    className="flex-1 px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition font-semibold text-xs sm:text-sm flex items-center justify-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> View Videos
+                  </button>
+                  <button onClick={() => { setEditingFolder(folder); setShowEditFolderModal(true); }}
+                    className={`px-3 sm:px-4 py-2 border rounded-xl transition ${dm ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-50'}`}>
+                    <Edit className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${s.tm}`} />
+                  </button>
+                  <button onClick={() => handleDeleteFolder(folder.id)}
+                    className={`px-3 sm:px-4 py-2 border rounded-xl transition ${dm ? 'border-red-800 hover:bg-red-900/30' : 'border-red-300 hover:bg-red-50'}`}>
+                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />
+                  </button>
+                </div>
+
+                <div className={`mt-3 pt-3 border-t flex items-center justify-between text-xs ${s.ts} ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+                  <span>Created {new Date(folder.createdAt).toLocaleDateString()}</span>
+                  <span>Watch: {folder.totalWatchTime}</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
       {/* Modals */}
       {selectedFolder && (
-        <FolderDetailsModal
-          folder={selectedFolder}
+        <FolderDetailsModal folder={selectedFolder} darkMode={dm}
           onClose={() => setSelectedFolder(null)}
           onUploadVideo={() => setShowUploadVideoModal(true)}
-          onPlayVideo={(video: Video) => {
-            setSelectedVideo(video);
-            setShowVideoPlayer(true);
-          }}
-          onEditVideo={(video: Video) => {
-            setEditingVideo(video);
-            setShowEditVideoModal(true);
-          }}
+          onPlayVideo={(v: VideoItem) => { setSelectedVideo(v); setShowVideoPlayer(true); }}
+          onEditVideo={(v: VideoItem) => { setEditingVideo(v); setShowEditVideoModal(true); }}
           onDeleteVideo={handleDeleteVideo}
-          onDownloadVideo={handleDownloadVideo}
-        />
+          onDownloadVideo={handleDownloadVideo} />
       )}
-
       {showVideoPlayer && selectedVideo && (
-        <VideoPlayerModal
-          video={selectedVideo}
-          onClose={() => {
-            setShowVideoPlayer(false);
-            setSelectedVideo(null);
-          }}
-          onDownload={handleDownloadVideo}
-        />
+        <VideoPlayerModal video={selectedVideo} onClose={() => { setShowVideoPlayer(false); setSelectedVideo(null); }} onDownload={handleDownloadVideo} />
       )}
-
       {showCreateFolderModal && (
-        <CreateFolderModal
-          onClose={() => setShowCreateFolderModal(false)}
-          onCreate={handleCreateFolder}
-        />
+        <CreateFolderModal darkMode={dm} onClose={() => setShowCreateFolderModal(false)} onCreate={handleCreateFolder} />
       )}
-
       {showEditFolderModal && editingFolder && (
-        <EditFolderModal
-          folder={editingFolder}
-          onClose={() => {
-            setShowEditFolderModal(false);
-            setEditingFolder(null);
-          }}
-          onUpdate={handleEditFolder}
-        />
+        <EditFolderModal folder={editingFolder} darkMode={dm}
+          onClose={() => { setShowEditFolderModal(false); setEditingFolder(null); }}
+          onUpdate={handleEditFolder} />
       )}
-
       {showUploadVideoModal && (
-        <UploadVideoModal
-          folders={folders}
-          selectedFolder={selectedFolder}
+        <UploadVideoModal folders={folders} selectedFolder={selectedFolder} darkMode={dm}
           onClose={() => setShowUploadVideoModal(false)}
-          onUpload={handleUploadVideo}
-          uploading={uploading}
-        />
+          onUpload={handleUploadVideo} uploading={uploading} />
       )}
-
       {showEditVideoModal && editingVideo && (
-        <EditVideoModal
-          video={editingVideo}
-          onClose={() => {
-            setShowEditVideoModal(false);
-            setEditingVideo(null);
-          }}
-          onUpdate={handleEditVideo}
-        />
+        <EditVideoModal video={editingVideo} darkMode={dm}
+          onClose={() => { setShowEditVideoModal(false); setEditingVideo(null); }}
+          onUpdate={handleEditVideo} />
       )}
     </div>
   );
 }
 
-// All modals below (FolderDetailsModal, VideoPlayerModal, CreateFolderModal, etc.)
-// Continue with the rest of the component...
-function FolderDetailsModal({ folder, onClose, onUploadVideo, onPlayVideo, onEditVideo, onDeleteVideo, onDownloadVideo }: any) {
+// ─── Shared modal wrapper (slides up on mobile) ───────────────────────────────
+function ModalWrap({ children, dm, maxW = 'sm:max-w-2xl' }: { children: React.ReactNode; dm: boolean; maxW?: string }) {
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-          <div>
-            <h3 className="text-2xl font-bold text-gray-900">{folder.name}</h3>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
-                {folder.subject}
-              </span>
-              <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-semibold">
-                {folder.class}
-              </span>
-              {folder.isPublic ? (
-                <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold flex items-center gap-1">
-                  <Globe className="w-3 h-3" />
-                  Public
-                </span>
-              ) : (
-                <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-semibold flex items-center gap-1">
-                  <Lock className="w-3 h-3" />
-                  Private
-                </span>
-              )}
-              <span className="text-sm text-gray-600">• {folder.chapter}</span>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className={`rounded-t-2xl sm:rounded-2xl w-full ${maxW} max-h-[95vh] sm:max-h-[90vh] overflow-hidden shadow-2xl ${dm ? 'bg-gray-900' : 'bg-white'}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared input helpers ─────────────────────────────────────────────────────
+function Field({ label, value, onChange, placeholder = '', required = false, type = 'text', disabled = false, dm }: any) {
+  const cls = `w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition text-sm sm:text-base ${
+    dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900'
+  } disabled:opacity-50`;
+  return (
+    <div>
+      <label className={`block text-xs sm:text-sm font-medium mb-1.5 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>
+        {label}{required && ' *'}
+      </label>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} required={required} disabled={disabled} className={cls} />
+    </div>
+  );
+}
+
+function TextareaField({ label, value, onChange, placeholder = '', rows = 3, disabled = false, dm }: any) {
+  const cls = `w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition text-sm sm:text-base resize-none ${
+    dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900'
+  } disabled:opacity-50`;
+  return (
+    <div>
+      <label className={`block text-xs sm:text-sm font-medium mb-1.5 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>{label}</label>
+      <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows} disabled={disabled} className={cls} />
+    </div>
+  );
+}
+
+// ─── SimpleImageUpload ────────────────────────────────────────────────────────
+function SimpleImageUpload({ onUpload, currentUrl, label, endpoint = 'folderThumbnail', accent = 'purple', dm }: any) {
+  const { startUpload, isUploading } = useUploadThing(endpoint, {
+    onClientUploadComplete: (res) => { if (res?.[0]) onUpload(res[0].url); },
+    onUploadError: (err: Error) => alert(`Upload failed: ${err.message}`),
+  });
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) await startUpload([file]);
+  };
+  if (currentUrl) {
+    return (
+      <div className="relative">
+        <img src={currentUrl} alt={label} className="w-full h-40 sm:h-48 object-cover rounded-xl border" />
+        <button type="button" onClick={() => onUpload('')}
+          className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition shadow-lg">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className={`border-2 border-dashed rounded-xl p-5 sm:p-6 text-center transition ${dm ? 'border-gray-600 hover:border-purple-500' : 'border-gray-300 hover:border-purple-500'}`}>
+      <label className="cursor-pointer block">
+        {isUploading ? (
+          <><Loader className={`w-10 h-10 sm:w-12 sm:h-12 text-${accent}-500 mx-auto mb-2 sm:mb-3 animate-spin`} />
+          <p className={`text-${accent}-500 font-medium text-sm`}>Uploading...</p></>
+        ) : (
+          <><ImageIcon className={`w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 ${dm ? 'text-gray-500' : 'text-gray-400'}`} />
+          <p className={`font-medium text-sm sm:text-base mb-1 ${dm ? 'text-gray-300' : 'text-gray-600'}`}>Click to upload {label}</p>
+          <p className={`text-xs ${dm ? 'text-gray-500' : 'text-gray-500'}`}>PNG, JPG, WEBP (Max 4MB)</p></>
+        )}
+        <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" disabled={isUploading} />
+      </label>
+    </div>
+  );
+}
+
+// ─── VisibilityPicker ─────────────────────────────────────────────────────────
+function VisibilityPicker({ isPublic, onChange, dm }: any) {
+  return (
+    <div>
+      <label className={`block text-xs sm:text-sm font-medium mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Visibility *</label>
+      <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 sm:gap-3">
+        {[
+          { val: true,  icon: Globe, label: 'Public',  sub: 'Visible to all students', color: 'text-green-500' },
+          { val: false, icon: Lock,  label: 'Private', sub: 'Only you can see',         color: 'text-orange-500' },
+        ].map(({ val, icon: Icon, label, sub, color }) => (
+          <label key={label} className={`flex items-center gap-2 sm:gap-3 cursor-pointer px-3 sm:px-4 py-2.5 sm:py-3 border-2 rounded-xl transition ${
+            isPublic === val
+              ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+              : dm ? 'border-gray-700 hover:border-purple-500' : 'border-gray-200 hover:border-purple-500'
+          }`}>
+            <input type="radio" checked={isPublic === val} onChange={() => onChange(val)} className="w-4 h-4 text-purple-600 flex-shrink-0" />
+            <Icon className={`w-4 h-4 ${color} flex-shrink-0`} />
+            <div>
+              <p className={`font-semibold text-xs sm:text-sm ${dm ? 'text-white' : 'text-gray-900'}`}>{label}</p>
+              <p className={`text-xs ${dm ? 'text-gray-500' : 'text-gray-500'}`}>{sub}</p>
+            </div>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal footer ─────────────────────────────────────────────────────────────
+function ModalFooter({ onClose, loading, saveLabel, loadLabel, dm }: any) {
+  const s = useS(dm);
+  return (
+    <div className={`p-4 sm:p-6 border-t-2 flex gap-2 sm:gap-3 flex-shrink-0 ${dm ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}`}>
+      <button type="button" onClick={onClose} disabled={loading}
+        className={`flex-1 px-4 sm:px-6 py-2.5 sm:py-3 border-2 rounded-xl transition font-semibold text-sm sm:text-base disabled:opacity-50 ${
+          dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+        }`}>Cancel</button>
+      <button type="submit" disabled={loading}
+        className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:shadow-lg transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base">
+        {loading ? <><Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />{loadLabel}</> : saveLabel}
+      </button>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FolderDetailsModal
+// ═════════════════════════════════════════════════════════════════════════════
+function FolderDetailsModal({ folder, darkMode: dm, onClose, onUploadVideo, onPlayVideo, onEditVideo, onDeleteVideo, onDownloadVideo }: any) {
+  const s = useS(dm);
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className={`rounded-t-2xl sm:rounded-2xl w-full sm:max-w-5xl lg:max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col shadow-2xl ${dm ? 'bg-gray-900' : 'bg-white'}`}>
+        {/* Header */}
+        <div className={`p-4 sm:p-6 border-b-2 flex items-start justify-between flex-shrink-0 ${dm ? 'border-gray-700 bg-gray-800' : 'border-gray-200'}`}>
+          <div className="min-w-0 pr-4">
+            <h3 className={`text-lg sm:text-2xl font-bold mb-2 ${s.tp}`}>{folder.name}</h3>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${dm ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>{folder.subject}</span>
+              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${dm ? 'bg-purple-900 text-purple-300' : 'bg-purple-100 text-purple-700'}`}>{folder.class}</span>
+              {folder.isPublic
+                ? <span className={`px-2 py-0.5 rounded text-xs font-semibold flex items-center gap-1 ${dm ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-700'}`}><Globe className="w-3 h-3" />Public</span>
+                : <span className={`px-2 py-0.5 rounded text-xs font-semibold flex items-center gap-1 ${dm ? 'bg-orange-900 text-orange-300' : 'bg-orange-100 text-orange-700'}`}><Lock className="w-3 h-3" />Private</span>}
+              <span className={`text-xs sm:text-sm ${s.tm}`}>• {folder.chapter}</span>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
-            <X className="w-6 h-6 text-gray-400" />
+          <button onClick={onClose} className={`p-2 rounded-xl transition flex-shrink-0 ${dm ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+            <X className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
 
-        <div className="overflow-y-auto max-h-[calc(90vh-200px)] p-6">
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold text-gray-900">Videos ({folder.videos.length})</h4>
-            <button
-              onClick={onUploadVideo}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-semibold flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Add Video
+            <h4 className={`font-semibold text-sm sm:text-base ${s.tp}`}>Videos ({folder.videos.length})</h4>
+            <button onClick={onUploadVideo}
+              className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition text-xs sm:text-sm font-semibold flex items-center gap-1.5">
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Add Video
             </button>
           </div>
 
           {folder.videos.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-xl">
-              <FileVideo className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 mb-4">No videos in this folder yet</p>
-              <button
-                onClick={onUploadVideo}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                Upload First Video
-              </button>
+            <div className={`text-center py-10 sm:py-12 rounded-xl ${dm ? 'bg-gray-800' : 'bg-gray-50'}`}>
+              <FileVideo className={`w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 ${dm ? 'text-gray-600' : 'text-gray-400'}`} />
+              <p className={`text-sm mb-3 ${s.tm}`}>No videos in this folder yet</p>
+              <button onClick={onUploadVideo} className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition text-sm">Upload First Video</button>
             </div>
           ) : (
-            <div className="space-y-4">
-              {folder.videos.map((video: Video) => (
-                <div key={video.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all">
-                  <div className="flex items-center gap-4 p-4">
-                    <div 
-                      onClick={() => onPlayVideo(video)}
-                      className="w-32 h-20 rounded-lg flex-shrink-0 relative group cursor-pointer overflow-hidden"
-                    >
-                      {video.thumbnail && video.thumbnail.trim() !== '' ? (
-                        <img 
-                          src={video.thumbnail} 
-                          alt={video.title} 
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
-                          <Play className="w-8 h-8 text-white" />
-                        </div>
-                      )}
-                      <span className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/80 text-white text-xs rounded">
-                        {video.duration}
-                      </span>
+            <div className="space-y-3 sm:space-y-4">
+              {folder.videos.map((video: VideoItem) => (
+                <div key={video.id} className={`${s.card2} overflow-hidden hover:shadow-lg transition-all`}>
+                  <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4">
+                    {/* Thumbnail */}
+                    <div onClick={() => onPlayVideo(video)}
+                      className="w-24 h-16 sm:w-32 sm:h-20 rounded-xl flex-shrink-0 relative group cursor-pointer overflow-hidden">
+                      {video.thumbnail?.trim()
+                        ? <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center"><Play className="w-6 h-6 sm:w-8 sm:h-8 text-white" /></div>}
+                      <span className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/80 text-white text-xs rounded">{video.duration}</span>
                     </div>
 
-                    <div className="flex-1">
-                      <h5 className="font-semibold text-gray-900 mb-1">{video.title}</h5>
-                      <p className="text-sm text-gray-600 mb-2 line-clamp-1">{video.description}</p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <Eye className="w-3 h-3" />
-                          {video.views} views
-                        </span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {video.totalWatchTime} watched
-                        </span>
-                        <span>•</span>
-                        <span>{new Date(video.uploadDate).toLocaleDateString()}</span>
-                        <span>•</span>
-                        <span>{video.size}</span>
-                        <span>•</span>
-                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-semibold">
-                          {video.quality}
-                        </span>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <h5 className={`font-semibold text-sm sm:text-base mb-1 truncate ${s.tp}`}>{video.title}</h5>
+                      <p className={`text-xs sm:text-sm mb-1.5 line-clamp-1 ${s.tm}`}>{video.description}</p>
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
+                        <span className={`flex items-center gap-1 ${s.ts}`}><Eye className="w-3 h-3" />{video.views} views</span>
+                        <span className={s.ts}>•</span>
+                        <span className={`flex items-center gap-1 ${s.ts}`}><Clock className="w-3 h-3" />{video.totalWatchTime}</span>
+                        <span className={s.ts}>•</span>
+                        <span className={s.ts}>{video.size}</span>
+                        <span className={`px-1.5 py-0.5 rounded font-semibold ${dm ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-700'}`}>{video.quality}</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => onPlayVideo(video)}
-                        className="p-2 hover:bg-purple-50 rounded-lg transition"
-                        title="Play"
-                      >
-                        <Play className="w-5 h-5 text-purple-600" />
-                      </button>
-                      <button 
-                        onClick={() => onDownloadVideo(video)}
-                        className="p-2 hover:bg-blue-50 rounded-lg transition"
-                        title="Download"
-                      >
-                        <Download className="w-5 h-5 text-blue-600" />
-                      </button>
-                      <button 
-                        onClick={() => onEditVideo(video)}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition"
-                        title="Edit"
-                      >
-                        <Edit className="w-5 h-5 text-gray-600" />
-                      </button>
-                      <button 
-                        onClick={() => onDeleteVideo(video.id)}
-                        className="p-2 hover:bg-red-50 rounded-lg transition"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-5 h-5 text-red-600" />
-                      </button>
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                      {[
+                        { action: () => onPlayVideo(video),    icon: Play,     cls: dm ? 'hover:bg-purple-900/50' : 'hover:bg-purple-50', ic: 'text-purple-500' },
+                        { action: () => onDownloadVideo(video),icon: Download,  cls: dm ? 'hover:bg-blue-900/50'   : 'hover:bg-blue-50',   ic: 'text-blue-500'   },
+                        { action: () => onEditVideo(video),    icon: Edit,     cls: dm ? 'hover:bg-gray-700'       : 'hover:bg-gray-100', ic: s.tm              },
+                        { action: () => onDeleteVideo(video.id),icon: Trash2,   cls: dm ? 'hover:bg-red-900/40'    : 'hover:bg-red-50',    ic: 'text-red-500'    },
+                      ].map(({ action, icon: Icon, cls, ic }, i) => (
+                        <button key={i} onClick={action} className={`p-1.5 sm:p-2 rounded-lg transition ${cls}`}>
+                          <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${ic}`} />
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -783,301 +629,145 @@ function FolderDetailsModal({ folder, onClose, onUploadVideo, onPlayVideo, onEdi
   );
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// VideoPlayerModal — unchanged logic, improved sizing
+// ═════════════════════════════════════════════════════════════════════════════
 function VideoPlayerModal({ video, onClose, onDownload }: any) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [volume, setVolume] = useState(100);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [showControls, setShowControls] = useState(true);
-  const [quality, setQuality] = useState('1080p');
-  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const videoRef      = useRef<HTMLVideoElement>(null);
+  const containerRef  = useRef<HTMLDivElement>(null);
+  const [isPlaying,     setIsPlaying]     = useState(false);
+  const [isMuted,       setIsMuted]       = useState(false);
+  const [isFullscreen,  setIsFullscreen]  = useState(false);
+  const [volume,        setVolume]        = useState(100);
+  const [currentTime,   setCurrentTime]  = useState(0);
+  const [duration,      setDuration]     = useState(0);
+  const [playbackRate,  setPlaybackRate] = useState(1);
+  const [showControls,  setShowControls] = useState(true);
+  const [quality,       setQuality]      = useState('1080p');
+  const controlsTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const handleTimeUpdate = () => setCurrentTime(video.currentTime);
-    const handleDurationChange = () => setDuration(video.duration);
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-
-    video.addEventListener('timeupdate', handleTimeUpdate);
-    video.addEventListener('durationchange', handleDurationChange);
-    video.addEventListener('loadedmetadata', handleDurationChange);
-    video.addEventListener('play', handlePlay);
-    video.addEventListener('pause', handlePause);
-
+    const v = videoRef.current;
+    if (!v) return;
+    const onTime     = () => setCurrentTime(v.currentTime);
+    const onDuration = () => setDuration(v.duration);
+    const onPlay     = () => setIsPlaying(true);
+    const onPause    = () => setIsPlaying(false);
+    v.addEventListener('timeupdate', onTime);
+    v.addEventListener('durationchange', onDuration);
+    v.addEventListener('loadedmetadata', onDuration);
+    v.addEventListener('play', onPlay);
+    v.addEventListener('pause', onPause);
     return () => {
-      video.removeEventListener('timeupdate', handleTimeUpdate);
-      video.removeEventListener('durationchange', handleDurationChange);
-      video.removeEventListener('loadedmetadata', handleDurationChange);
-      video.removeEventListener('play', handlePlay);
-      video.removeEventListener('pause', handlePause);
+      v.removeEventListener('timeupdate', onTime);
+      v.removeEventListener('durationchange', onDuration);
+      v.removeEventListener('loadedmetadata', onDuration);
+      v.removeEventListener('play', onPlay);
+      v.removeEventListener('pause', onPause);
     };
   }, []);
 
-  const togglePlay = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    if (video.paused) {
-      video.play();
-    } else {
-      video.pause();
-    }
+  const togglePlay  = () => videoRef.current?.paused ? videoRef.current.play() : videoRef.current?.pause();
+  const toggleMute  = () => { if (!videoRef.current) return; videoRef.current.muted = !videoRef.current.muted; setIsMuted(videoRef.current.muted); };
+  const handleVol   = (e: React.ChangeEvent<HTMLInputElement>) => { if (!videoRef.current) return; const v = +e.target.value; videoRef.current.volume = v/100; setVolume(v); setIsMuted(v===0); };
+  const handleSeek  = (e: React.ChangeEvent<HTMLInputElement>) => { if (!videoRef.current) return; videoRef.current.currentTime = +e.target.value; setCurrentTime(+e.target.value); };
+  const handleSkip  = (s: number) => { if (videoRef.current) videoRef.current.currentTime += s; };
+  const handleRate  = (r: number) => { if (videoRef.current) videoRef.current.playbackRate = r; setPlaybackRate(r); };
+  const toggleFS    = () => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) { containerRef.current.requestFullscreen(); setIsFullscreen(true); }
+    else { document.exitFullscreen(); setIsFullscreen(false); }
   };
-
-  const toggleMute = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    video.muted = !video.muted;
-    setIsMuted(video.muted);
+  const fmt = (t: number) => {
+    if (isNaN(t) || !isFinite(t)) return '0:00';
+    const h = Math.floor(t/3600), m = Math.floor((t%3600)/60), s = Math.floor(t%60);
+    return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
   };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    const newVolume = parseInt(e.target.value);
-    video.volume = newVolume / 100;
-    setVolume(newVolume);
-    setIsMuted(newVolume === 0);
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    const newTime = parseFloat(e.target.value);
-    video.currentTime = newTime;
-    setCurrentTime(newTime);
-  };
-
-  const handleSkip = (seconds: number) => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    video.currentTime += seconds;
-  };
-
-  const handlePlaybackRateChange = (rate: number) => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    video.playbackRate = rate;
-    setPlaybackRate(rate);
-  };
-
-  const toggleFullscreen = () => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    if (!document.fullscreenElement) {
-      container.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    }
-  };
-
-  const formatTime = (time: number) => {
-    if (isNaN(time) || !isFinite(time)) return '0:00';
-    
-    const hours = Math.floor(time / 3600);
-    const minutes = Math.floor((time % 3600) / 60);
-    const seconds = Math.floor(time % 60);
-    
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
-
   const handleMouseMove = () => {
     setShowControls(true);
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
-    controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying) {
-        setShowControls(false);
-      }
-    }, 3000);
+    if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+    controlsTimerRef.current = setTimeout(() => { if (isPlaying) setShowControls(false); }, 3000);
   };
-
-  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const prog = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
-      <div 
-        ref={containerRef}
-        className="w-full h-full relative"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => isPlaying && setShowControls(false)}
-      >
-        <button
-          onClick={onClose}
-          className={`absolute top-4 right-4 z-50 p-2 bg-black/50 hover:bg-black/70 rounded-lg transition ${showControls ? 'opacity-100' : 'opacity-0'}`}
-        >
-          <X className="w-6 h-6 text-white" />
+      <div ref={containerRef} className="w-full h-full relative" onMouseMove={handleMouseMove} onMouseLeave={() => isPlaying && setShowControls(false)}>
+        <button onClick={onClose} className={`absolute top-3 right-3 sm:top-4 sm:right-4 z-50 p-2 bg-black/50 hover:bg-black/70 rounded-xl transition ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+          <X className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
         </button>
-
-        <div className={`absolute top-4 left-4 right-16 z-50 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-          <h3 className="text-xl font-bold text-white drop-shadow-lg">{video.title}</h3>
+        <div className={`absolute top-3 left-3 sm:top-4 sm:left-4 right-14 z-50 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+          <h3 className="text-base sm:text-xl font-bold text-white drop-shadow-lg truncate">{video.title}</h3>
         </div>
-
         <div className="w-full h-full flex items-center justify-center bg-black">
-          <video
-            ref={videoRef}
-            src={video.videoUrl}
-            className="max-w-full max-h-full"
-            onClick={togglePlay}
-          />
+          <video ref={videoRef} src={video.videoUrl} className="max-w-full max-h-full" onClick={togglePlay} />
         </div>
-
         <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-          <div className="px-6 pt-6 pb-2">
-            <div className="relative w-full h-6 group cursor-pointer" onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const clickX = e.clientX - rect.left;
-              const percentage = clickX / rect.width;
-              const newTime = percentage * duration;
-              if (videoRef.current) {
-                videoRef.current.currentTime = newTime;
-              }
+          {/* Progress bar */}
+          <div className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
+            <div className="relative w-full h-5 sm:h-6 group cursor-pointer" onClick={e => {
+              const r = e.currentTarget.getBoundingClientRect();
+              if (videoRef.current) videoRef.current.currentTime = ((e.clientX - r.left) / r.width) * duration;
             }}>
-              <div className="absolute top-1/2 -translate-y-1/2 w-full h-1.5 bg-white/30 rounded-full">
-                <div 
-                  className="absolute top-0 left-0 h-full bg-purple-600 rounded-full transition-all"
-                  style={{ width: `${progressPercentage}%` }}
-                />
+              <div className="absolute top-1/2 -translate-y-1/2 w-full h-1 sm:h-1.5 bg-white/30 rounded-full">
+                <div className="absolute top-0 left-0 h-full bg-purple-600 rounded-full" style={{ width: `${prog}%` }} />
               </div>
-              
-              <div 
-                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-purple-600 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ left: `${progressPercentage}%`, transform: 'translate(-50%, -50%)' }}
-              />
-              
-              <input
-                type="range"
-                min="0"
-                max={duration || 0}
-                value={currentTime}
-                onChange={handleSeek}
-                className="absolute inset-0 w-full opacity-0 cursor-pointer"
-              />
+              <div className="absolute top-1/2 w-3 h-3 sm:w-4 sm:h-4 bg-purple-600 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity" style={{ left: `${prog}%`, transform: 'translate(-50%, -50%)' }} />
+              <input type="range" min="0" max={duration||0} value={currentTime} onChange={handleSeek} className="absolute inset-0 w-full opacity-0 cursor-pointer" />
             </div>
-            
-            <div className="flex justify-between text-xs text-white/90 mt-2 font-medium">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+            <div className="flex justify-between text-xs text-white/90 mt-1 font-medium">
+              <span>{fmt(currentTime)}</span><span>{fmt(duration)}</span>
             </div>
           </div>
-
-          <div className="px-6 pb-6 pt-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+          {/* Controls */}
+          <div className="px-3 sm:px-6 pb-4 sm:pb-6 pt-1 sm:pt-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-3">
                 <button onClick={togglePlay} className="p-2 hover:bg-white/20 rounded-lg transition">
-                  {isPlaying ? (
-                    <Pause className="w-6 h-6 text-white" />
-                  ) : (
-                    <Play className="w-6 h-6 text-white" />
-                  )}
+                  {isPlaying ? <Pause className="w-5 h-5 sm:w-6 sm:h-6 text-white" /> : <Play className="w-5 h-5 sm:w-6 sm:h-6 text-white" />}
                 </button>
-
-                <button onClick={() => handleSkip(-10)} className="p-2 hover:bg-white/20 rounded-lg transition" title="Rewind 10s">
-                  <SkipBack className="w-5 h-5 text-white" />
+                <button onClick={() => handleSkip(-10)} className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg transition" title="Rewind 10s">
+                  <SkipBack className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </button>
-
-                <button onClick={() => handleSkip(10)} className="p-2 hover:bg-white/20 rounded-lg transition" title="Forward 10s">
-                  <SkipForward className="w-5 h-5 text-white" />
+                <button onClick={() => handleSkip(10)} className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg transition" title="Forward 10s">
+                  <SkipForward className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </button>
-
-                <div className="flex items-center gap-2 group/volume">
-                  <button onClick={toggleMute} className="p-2 hover:bg-white/20 rounded-lg transition">
-                    {isMuted || volume === 0 ? (
-                      <VolumeX className="w-5 h-5 text-white" />
-                    ) : (
-                      <Volume2 className="w-5 h-5 text-white" />
-                    )}
+                <div className="flex items-center gap-1 group/vol">
+                  <button onClick={toggleMute} className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg transition">
+                    {isMuted || volume === 0 ? <VolumeX className="w-4 h-4 sm:w-5 sm:h-5 text-white" /> : <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />}
                   </button>
-                  <div className="w-0 group-hover/volume:w-24 transition-all duration-300 overflow-hidden">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={volume}
-                      onChange={handleVolumeChange}
-                      className="w-24 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer"
-                      style={{
-                        background: `linear-gradient(to right, #8b5cf6 ${volume}%, rgba(255,255,255,0.3) ${volume}%)`
-                      }}
-                    />
+                  <div className="w-0 group-hover/vol:w-16 sm:group-hover/vol:w-24 overflow-hidden transition-all duration-300">
+                    <input type="range" min="0" max="100" value={volume} onChange={handleVol}
+                      className="w-16 sm:w-24 h-1 rounded-lg cursor-pointer" style={{ background: `linear-gradient(to right, #8b5cf6 ${volume}%, rgba(255,255,255,0.3) ${volume}%)` }} />
                   </div>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2">
                 <div className="relative group">
-                  <button className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition text-white text-sm font-medium min-w-[60px]">
-                    {playbackRate}x
-                  </button>
-                  <div className="absolute bottom-full mb-2 right-0 bg-black/95 rounded-lg p-2 hidden group-hover:block min-w-[100px]">
-                    {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
-                      <button
-                        key={rate}
-                        onClick={() => handlePlaybackRateChange(rate)}
-                        className={`block w-full text-left px-3 py-2 rounded text-sm transition ${
-                          playbackRate === rate ? 'bg-purple-600 text-white' : 'text-white hover:bg-white/20'
-                        }`}
-                      >
-                        {rate}x {rate === 1 && '(Normal)'}
+                  <button className="px-2 sm:px-3 py-1 sm:py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-white text-xs sm:text-sm font-medium min-w-[44px] sm:min-w-[60px]">{playbackRate}x</button>
+                  <div className="absolute bottom-full mb-2 right-0 bg-black/95 rounded-xl p-1.5 sm:p-2 hidden group-hover:block min-w-[80px] sm:min-w-[100px]">
+                    {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map(r => (
+                      <button key={r} onClick={() => handleRate(r)} className={`block w-full text-left px-2 sm:px-3 py-1.5 sm:py-2 rounded text-xs sm:text-sm transition ${playbackRate === r ? 'bg-purple-600 text-white' : 'text-white hover:bg-white/20'}`}>
+                        {r}x{r===1 && ' (Normal)'}
                       </button>
                     ))}
                   </div>
                 </div>
-
                 <div className="relative group">
-                  <button className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition text-white text-sm font-medium flex items-center gap-1.5 min-w-[80px]">
-                    <Settings className="w-4 h-4" />
-                    {quality}
+                  <button className="px-2 sm:px-3 py-1 sm:py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-white text-xs sm:text-sm font-medium flex items-center gap-1 min-w-[60px] sm:min-w-[80px]">
+                    <Settings className="w-3 h-3 sm:w-4 sm:h-4" />{quality}
                   </button>
-                  <div className="absolute bottom-full mb-2 right-0 bg-black/95 rounded-lg p-2 hidden group-hover:block min-w-[100px]">
-                    {['1080p', '720p', '480p', '360p'].map((q) => (
-                      <button
-                        key={q}
-                        onClick={() => setQuality(q)}
-                        className={`block w-full text-left px-3 py-2 rounded text-sm transition ${
-                          quality === q ? 'bg-purple-600 text-white' : 'text-white hover:bg-white/20'
-                        }`}
-                      >
-                        {q}
-                      </button>
+                  <div className="absolute bottom-full mb-2 right-0 bg-black/95 rounded-xl p-1.5 sm:p-2 hidden group-hover:block min-w-[80px] sm:min-w-[100px]">
+                    {['1080p','720p','480p','360p'].map(q => (
+                      <button key={q} onClick={() => setQuality(q)} className={`block w-full text-left px-2 sm:px-3 py-1.5 sm:py-2 rounded text-xs sm:text-sm transition ${quality === q ? 'bg-purple-600 text-white' : 'text-white hover:bg-white/20'}`}>{q}</button>
                     ))}
                   </div>
                 </div>
-
-                <button 
-                  onClick={() => onDownload(video)}
-                  className="p-2 hover:bg-white/20 rounded-lg transition"
-                  title="Download"
-                >
-                  <Download className="w-5 h-5 text-white" />
+                <button onClick={() => onDownload(video)} className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg transition" title="Download">
+                  <Download className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </button>
-
-                <button onClick={toggleFullscreen} className="p-2 hover:bg-white/20 rounded-lg transition" title="Fullscreen (F)">
-                  {isFullscreen ? (
-                    <Minimize className="w-5 h-5 text-white" />
-                  ) : (
-                    <Maximize className="w-5 h-5 text-white" />
-                  )}
+                <button onClick={toggleFS} className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg transition">
+                  {isFullscreen ? <Minimize className="w-4 h-4 sm:w-5 sm:h-5 text-white" /> : <Maximize className="w-4 h-4 sm:w-5 sm:h-5 text-white" />}
                 </button>
               </div>
             </div>
@@ -1088,779 +778,227 @@ function VideoPlayerModal({ video, onClose, onDownload }: any) {
   );
 }
 
-// ✅ FIXED: Simple image upload component (no UploadButton needed)
-function SimpleImageUpload({ onUpload, currentUrl, label }: { onUpload: (url: string) => void; currentUrl: string; label: string }) {
-  const { startUpload, isUploading } = useUploadThing("folderThumbnail", {
-    onClientUploadComplete: (res) => {
-      if (res && res[0]) {
-        onUpload(res[0].url);
-      }
-    },
-    onUploadError: (error: Error) => {
-      alert(`Upload failed: ${error.message}`);
-    },
-  });
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      await startUpload([file]);
-    } catch (error) {
-      console.error('Upload error:', error);
-    }
-  };
-
-  if (currentUrl) {
-    return (
-      <div className="relative">
-        <img 
-          src={currentUrl} 
-          alt={label} 
-          className="w-full h-48 object-cover rounded-lg border"
-        />
-        <button
-          type="button"
-          onClick={() => onUpload('')}
-          className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 transition">
-      <label className="cursor-pointer block">
-        {isUploading ? (
-          <div>
-            <Loader className="w-12 h-12 text-purple-600 mx-auto mb-3 animate-spin" />
-            <p className="text-purple-600 font-medium">Uploading...</p>
-          </div>
-        ) : (
-          <div>
-            <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600 mb-1 font-medium">Click to upload {label}</p>
-            <p className="text-xs text-gray-500">PNG, JPG, WEBP (Max 4MB)</p>
-          </div>
-        )}
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="hidden"
-          disabled={isUploading}
-        />
-      </label>
-    </div>
-  );
-}
-
-// ✅ FIXED: CreateFolderModal with proper thumbnail upload
-function CreateFolderModal({ onClose, onCreate }: { onClose: () => void; onCreate: (data: any) => void }) {
+// ═════════════════════════════════════════════════════════════════════════════
+// FolderFormModal — used by both Create and Edit
+// ═════════════════════════════════════════════════════════════════════════════
+function FolderFormModal({ mode, folder, darkMode: dm, onClose, onCreate, onUpdate }: any) {
+  const isEdit = mode === 'edit';
   const [formData, setFormData] = useState({
-    name: '',
-    subject: '',
-    class: '',
-    chapter: '',
-    description: '',
-    isPublic: true,
-    thumbnailUrl: ''
+    name:         folder?.name        || '',
+    subject:      folder?.subject     || '',
+    class:        folder?.class       || '',
+    chapter:      folder?.chapter     || '',
+    description:  folder?.description || '',
+    isPublic:     folder?.isPublic    ?? true,
+    thumbnailUrl: folder?.thumbnail   || '',
   });
-  const [isCreating, setIsCreating] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.name || !formData.subject || !formData.class || !formData.chapter) {
-      alert('Please fill in all required fields');
-      return;
-    }
-    
-    setIsCreating(true);
-    await onCreate(formData);
-    setIsCreating(false);
+    if (!formData.name || !formData.subject || !formData.class || !formData.chapter) { alert('Please fill in all required fields'); return; }
+    setBusy(true);
+    isEdit ? await onUpdate(folder.id, formData) : await onCreate(formData);
+    setBusy(false);
   };
+
+  const set = (key: string) => (val: any) => setFormData(p => ({ ...p, [key]: val }));
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <h3 className="text-2xl font-bold text-gray-900">Create New Folder</h3>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
-            <X className="w-6 h-6 text-gray-400" />
-          </button>
+    <ModalWrap dm={dm}>
+      <div className={`p-4 sm:p-6 border-b-2 flex items-center justify-between flex-shrink-0 ${dm ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50'}`}>
+        <div>
+          <h3 className={`text-xl sm:text-2xl font-bold ${dm ? 'text-white' : 'text-gray-900'}`}>{isEdit ? 'Edit Folder' : 'Create New Folder'}</h3>
+          <p className={`text-xs sm:text-sm mt-0.5 ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{isEdit ? 'Update folder details' : 'Fill in the details for your new folder'}</p>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Folder Name *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g., Wave Optics Complete"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Subject *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g., Physics, Chemistry, Mathematics"
-              value={formData.subject}
-              onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Class *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g., 12th, 11th, NEET, JEE"
-              value={formData.class}
-              onChange={(e) => setFormData({ ...formData, class: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Chapter *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g., Chapter 10 - Wave Optics"
-              value={formData.chapter}
-              onChange={(e) => setFormData({ ...formData, chapter: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea
-              rows={4}
-              placeholder="Brief description of what this folder contains..."
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Folder Thumbnail</label>
-            <SimpleImageUpload
-              onUpload={(url) => setFormData({ ...formData, thumbnailUrl: url })}
-              currentUrl={formData.thumbnailUrl}
-              label="thumbnail"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">Visibility *</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer px-4 py-3 border-2 rounded-lg flex-1 transition hover:border-purple-500">
-                <input
-                  type="radio"
-                  name="visibility"
-                  checked={formData.isPublic}
-                  onChange={() => setFormData({ ...formData, isPublic: true })}
-                  className="w-4 h-4 text-purple-600"
-                />
-                <div className="flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-green-600" />
-                  <div>
-                    <p className="font-medium text-gray-900">Public</p>
-                    <p className="text-xs text-gray-500">Visible to all students</p>
-                  </div>
-                </div>
-              </label>
-              
-              <label className="flex items-center gap-2 cursor-pointer px-4 py-3 border-2 rounded-lg flex-1 transition hover:border-purple-500">
-                <input
-                  type="radio"
-                  name="visibility"
-                  checked={!formData.isPublic}
-                  onChange={() => setFormData({ ...formData, isPublic: false })}
-                  className="w-4 h-4 text-purple-600"
-                />
-                <div className="flex items-center gap-2">
-                  <Lock className="w-5 h-5 text-orange-600" />
-                  <div>
-                    <p className="font-medium text-gray-900">Private</p>
-                    <p className="text-xs text-gray-500">Only you can see</p>
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isCreating}
-              className="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-semibold disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isCreating}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:shadow-lg transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {isCreating ? (
-                <>
-                  <Loader className="w-5 h-5 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                'Create Folder'
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ✅ EditFolderModal (similar to Create, but with editing)
-function EditFolderModal({ folder, onClose, onUpdate }: any) {
-  const [formData, setFormData] = useState({
-    name: folder.name,
-    subject: folder.subject,
-    class: folder.class || '',
-    chapter: folder.chapter,
-    description: folder.description || '',
-    isPublic: folder.isPublic ?? true,
-    thumbnailUrl: folder.thumbnail || ''
-  });
-  const [isUpdating, setIsUpdating] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsUpdating(true);
-    await onUpdate(folder.id, formData);
-    setIsUpdating(false);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <h3 className="text-2xl font-bold text-gray-900">Edit Folder</h3>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
-            <X className="w-6 h-6 text-gray-400" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Folder Name *</label>
-            <input
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Subject *</label>
-            <input
-              type="text"
-              required
-              value={formData.subject}
-              onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Class *</label>
-            <input
-              type="text"
-              required
-              value={formData.class}
-              onChange={(e) => setFormData({ ...formData, class: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Chapter *</label>
-            <input
-              type="text"
-              required
-              value={formData.chapter}
-              onChange={(e) => setFormData({ ...formData, chapter: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea
-              rows={4}
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Folder Thumbnail</label>
-            <SimpleImageUpload
-              onUpload={(url) => setFormData({ ...formData, thumbnailUrl: url })}
-              currentUrl={formData.thumbnailUrl}
-              label="thumbnail"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">Visibility *</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer px-4 py-3 border-2 rounded-lg flex-1 transition hover:border-purple-500">
-                <input
-                  type="radio"
-                  name="visibility"
-                  checked={formData.isPublic === true}
-                  onChange={() => setFormData({ ...formData, isPublic: true })}
-                  className="w-4 h-4 text-purple-600"
-                />
-                <div className="flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-green-600" />
-                  <div>
-                    <p className="font-medium text-gray-900">Public</p>
-                    <p className="text-xs text-gray-500">Visible to students</p>
-                  </div>
-                </div>
-              </label>
-              
-              <label className="flex items-center gap-2 cursor-pointer px-4 py-3 border-2 rounded-lg flex-1 transition hover:border-purple-500">
-                <input
-                  type="radio"
-                  name="visibility"
-                  checked={formData.isPublic === false}
-                  onChange={() => setFormData({ ...formData, isPublic: false })}
-                  className="w-4 h-4 text-purple-600"
-                />
-                <div className="flex items-center gap-2">
-                  <Lock className="w-5 h-5 text-orange-600" />
-                  <div>
-                    <p className="font-medium text-gray-900">Private</p>
-                    <p className="text-xs text-gray-500">Only you</p>
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isUpdating}
-              className="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-semibold disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isUpdating}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:shadow-lg transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {isUpdating ? (
-                <>
-                  <Loader className="w-5 h-5 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                'Update Folder'
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ✅ Simple video thumbnail upload component
-function SimpleVideoThumbnailUpload({ onUpload, currentUrl, label }: { onUpload: (url: string) => void; currentUrl: string; label: string }) {
-  const { startUpload, isUploading } = useUploadThing("videoThumbnail", {
-    onClientUploadComplete: (res) => {
-      if (res && res[0]) {
-        onUpload(res[0].url);
-      }
-    },
-    onUploadError: (error: Error) => {
-      alert(`Upload failed: ${error.message}`);
-    },
-  });
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      await startUpload([file]);
-    } catch (error) {
-      console.error('Upload error:', error);
-    }
-  };
-
-  if (currentUrl) {
-    return (
-      <div className="relative">
-        <img 
-          src={currentUrl} 
-          alt={label} 
-          className="w-full h-48 object-cover rounded-lg border"
-        />
-        <button
-          type="button"
-          onClick={() => onUpload('')}
-          className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition"
-        >
-          <X className="w-4 h-4" />
+        <button onClick={onClose} className={`p-2 rounded-xl transition flex-shrink-0 ${dm ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+          <X className="w-5 h-5 sm:w-6 sm:h-6" />
         </button>
       </div>
-    );
-  }
-
-  return (
-    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition">
-      <label className="cursor-pointer block">
-        {isUploading ? (
+      <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
+          <Field label="Folder Name" value={formData.name} onChange={set('name')} placeholder="e.g., Wave Optics Complete" required dm={dm} />
+          <Field label="Subject"     value={formData.subject} onChange={set('subject')} placeholder="e.g., Physics, Chemistry" required dm={dm} />
+          <Field label="Class"       value={formData.class} onChange={set('class')} placeholder="e.g., 12th, JEE, NEET" required dm={dm} />
+          <Field label="Chapter"     value={formData.chapter} onChange={set('chapter')} placeholder="e.g., Chapter 10 - Wave Optics" required dm={dm} />
+          <TextareaField label="Description" value={formData.description} onChange={set('description')} placeholder="Brief description of what this folder contains..." dm={dm} />
           <div>
-            <Loader className="w-12 h-12 text-blue-600 mx-auto mb-3 animate-spin" />
-            <p className="text-blue-600 font-medium">Uploading...</p>
+            <label className={`block text-xs sm:text-sm font-medium mb-1.5 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Folder Thumbnail</label>
+            <SimpleImageUpload onUpload={set('thumbnailUrl')} currentUrl={formData.thumbnailUrl} label="thumbnail" endpoint="folderThumbnail" dm={dm} />
           </div>
-        ) : (
-          <div>
-            <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600 mb-1 font-medium">Click to upload {label}</p>
-            <p className="text-xs text-gray-500">PNG, JPG, WEBP (Max 4MB)</p>
-          </div>
-        )}
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="hidden"
-          disabled={isUploading}
-        />
-      </label>
-    </div>
+          <VisibilityPicker isPublic={formData.isPublic} onChange={set('isPublic')} dm={dm} />
+        </div>
+        <ModalFooter onClose={onClose} loading={busy} saveLabel={isEdit ? 'Update Folder' : 'Create Folder'} loadLabel={isEdit ? 'Updating...' : 'Creating...'} dm={dm} />
+      </form>
+    </ModalWrap>
   );
 }
 
-// ✅ UploadVideoModal with Puter.js + UploadThing
-function UploadVideoModal({ folders, selectedFolder, onClose, onUpload, uploading }: any) {
+function CreateFolderModal({ darkMode, onClose, onCreate }: any) {
+  return <FolderFormModal mode="create" darkMode={darkMode} onClose={onClose} onCreate={onCreate} />;
+}
+function EditFolderModal({ folder, darkMode, onClose, onUpdate }: any) {
+  return <FolderFormModal mode="edit" folder={folder} darkMode={darkMode} onClose={onClose} onUpdate={onUpdate} />;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// UploadVideoModal
+// ═════════════════════════════════════════════════════════════════════════════
+function UploadVideoModal({ folders, selectedFolder, darkMode: dm, onClose, onUpload, uploading }: any) {
+  const s = useS(dm);
   const [formData, setFormData] = useState({
     folderId: selectedFolder?.id || '',
-    title: '',
-    description: '',
+    title: '', description: '',
     videoFile: null as File | null,
-    thumbnailUrl: '',
-    videoUrl: '',
-    duration: '0:00',
-    size: '0 MB',
-    quality: '1080p'
+    thumbnailUrl: '', videoUrl: '',
+    duration: '0:00', size: '0 MB', quality: '1080p',
   });
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [busy,     setBusy]     = useState(false);
 
   const handleVideoChange = async (file: File | null) => {
-    setFormData(prev => ({ ...prev, videoFile: file }));
-    
+    setFormData(p => ({ ...p, videoFile: file }));
     if (file) {
       try {
-        const duration = await getVideoDuration(file);
-        const size = formatFileSize(file.size);
-        setFormData(prev => ({ ...prev, duration, size }));
-      } catch (error) {
-        console.error('Error extracting duration:', error);
-      }
+        const [dur, sz] = await Promise.all([getVideoDuration(file).catch(() => '0:00'), Promise.resolve(formatFileSize(file.size))]);
+        setFormData(p => ({ ...p, duration: dur, size: sz }));
+      } catch { /* silent */ }
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.videoFile) {
-      alert('Please select a video file');
-      return;
-    }
-    if (!formData.folderId) {
-      alert('Please select a folder');
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadProgress(0);
-
+    if (!formData.videoFile) { alert('Please select a video file'); return; }
+    if (!formData.folderId)  { alert('Please select a folder'); return; }
+    setBusy(true); setProgress(0);
     try {
-      console.log('Uploading video to Puter.js...');
-      const puterResult = await uploadVideoToPuter(formData.videoFile, (progress) => {
-        setUploadProgress(progress);
-      });
-
-      console.log('Puter upload complete:', puterResult.url);
-
-      await onUpload({
-        ...formData,
-        videoUrl: puterResult.url
-      });
-
-    } catch (error) {
-      console.error('Error uploading video:', error);
-      alert(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(0);
-    }
+      const res = await uploadVideoToPuter(formData.videoFile, p => setProgress(p));
+      await onUpload({ ...formData, videoUrl: res.url });
+    } catch (e) { alert(`Upload failed: ${e instanceof Error ? e.message : 'Unknown error'}`); }
+    finally { setBusy(false); setProgress(0); }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <h3 className="text-2xl font-bold text-gray-900">Upload Video</h3>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition" disabled={isUploading}>
-            <X className="w-6 h-6 text-gray-400" />
-          </button>
+    <ModalWrap dm={dm}>
+      <div className={`p-4 sm:p-6 border-b-2 flex items-center justify-between flex-shrink-0 ${dm ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50'}`}>
+        <div>
+          <h3 className={`text-xl sm:text-2xl font-bold ${dm ? 'text-white' : 'text-gray-900'}`}>Upload Video</h3>
+          <p className={`text-xs sm:text-sm mt-0.5 ${dm ? 'text-gray-400' : 'text-gray-600'}`}>Add a new lecture video to your library</p>
         </div>
+        <button onClick={onClose} disabled={busy} className={`p-2 rounded-xl transition flex-shrink-0 ${dm ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+          <X className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
+      </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+      <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
+          {/* Folder select */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Folder *</label>
-            <select
-              required
-              value={formData.folderId}
-              onChange={(e) => setFormData({ ...formData, folderId: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isUploading}
-            >
+            <label className={`block text-xs sm:text-sm font-medium mb-1.5 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Select Folder *</label>
+            <select required value={formData.folderId} onChange={e => setFormData(p => ({ ...p, folderId: e.target.value }))} disabled={busy}
+              className={`${s.input} appearance-auto`}>
               <option value="">Choose a folder</option>
-              {folders.map((folder: VideoFolder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folder.name} ({folder.subject}) - {folder.isPublic ? 'Public' : 'Private'}
-                </option>
+              {folders.map((f: VideoFolder) => (
+                <option key={f.id} value={f.id}>{f.name} ({f.subject}) — {f.isPublic ? 'Public' : 'Private'}</option>
               ))}
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Video Title *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g., Introduction to Wave Optics"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isUploading}
-            />
-          </div>
+          <Field label="Video Title" value={formData.title} onChange={(v: string) => setFormData(p => ({ ...p, title: v }))} placeholder="e.g., Introduction to Wave Optics" required disabled={busy} dm={dm} />
+          <TextareaField label="Description" value={formData.description} onChange={(v: string) => setFormData(p => ({ ...p, description: v }))} placeholder="Brief description of the video..." rows={3} disabled={busy} dm={dm} />
 
+          {/* Video file */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea
-              rows={3}
-              placeholder="Brief description of the video content..."
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isUploading}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Video File *</label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition">
+            <label className={`block text-xs sm:text-sm font-medium mb-1.5 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Video File *</label>
+            <div className={`border-2 border-dashed rounded-xl p-6 sm:p-8 text-center transition ${dm ? 'border-gray-600 hover:border-blue-500' : 'border-gray-300 hover:border-blue-500'}`}>
               {formData.videoFile ? (
                 <div>
-                  <FileVideo className="w-12 h-12 text-green-600 mx-auto mb-3" />
-                  <p className="text-green-600 font-medium mb-1">✓ {formData.videoFile.name}</p>
-                  <p className="text-xs text-gray-500 mb-2">{formData.size}</p>
-                  <p className="text-xs text-gray-600">Duration: {formData.duration}</p>
-                  <label className="mt-3 inline-block px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition cursor-pointer text-sm">
+                  <FileVideo className="w-10 h-10 sm:w-12 sm:h-12 text-green-500 mx-auto mb-2 sm:mb-3" />
+                  <p className="text-green-500 font-medium text-sm mb-1">✓ {formData.videoFile.name}</p>
+                  <p className={`text-xs mb-1 ${s.ts}`}>{formData.size}</p>
+                  <p className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-600'}`}>Duration: {formData.duration}</p>
+                  <label className={`mt-3 inline-block px-4 py-2 rounded-xl cursor-pointer text-xs sm:text-sm font-semibold ${dm ? 'bg-blue-900/40 text-blue-300 hover:bg-blue-900/60' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'} transition`}>
                     Change Video
-                    <input
-                      type="file"
-                      accept="video/*"
-                      onChange={(e) => handleVideoChange(e.target.files?.[0] || null)}
-                      className="hidden"
-                      disabled={isUploading}
-                    />
+                    <input type="file" accept="video/*" onChange={e => handleVideoChange(e.target.files?.[0] || null)} className="hidden" disabled={busy} />
                   </label>
                 </div>
               ) : (
                 <label className="cursor-pointer block">
-                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-600 mb-1 font-medium">Click to upload video</p>
-                  <p className="text-xs text-gray-500">MP4, AVI, MOV (Any size - unlimited storage)</p>
-                  <input
-                    type="file"
-                    accept="video/*"
-                    onChange={(e) => handleVideoChange(e.target.files?.[0] || null)}
-                    className="hidden"
-                    required
-                    disabled={isUploading}
-                  />
+                  <Upload className={`w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 ${dm ? 'text-gray-500' : 'text-gray-400'}`} />
+                  <p className={`font-medium text-sm sm:text-base mb-1 ${dm ? 'text-gray-300' : 'text-gray-600'}`}>Click to upload video</p>
+                  <p className={`text-xs ${s.ts}`}>MP4, AVI, MOV (Any size — unlimited storage)</p>
+                  <input type="file" accept="video/*" onChange={e => handleVideoChange(e.target.files?.[0] || null)} className="hidden" required disabled={busy} />
                 </label>
               )}
             </div>
           </div>
 
+          {/* Thumbnail */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Video Thumbnail (Optional)</label>
-            <SimpleVideoThumbnailUpload
-              onUpload={(url) => setFormData({ ...formData, thumbnailUrl: url })}
-              currentUrl={formData.thumbnailUrl}
-              label="video thumbnail"
-            />
+            <label className={`block text-xs sm:text-sm font-medium mb-1.5 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Video Thumbnail (Optional)</label>
+            <SimpleImageUpload onUpload={(url: string) => setFormData(p => ({ ...p, thumbnailUrl: url }))} currentUrl={formData.thumbnailUrl} label="video thumbnail" endpoint="videoThumbnail" accent="blue" dm={dm} />
           </div>
 
-          {isUploading && (
+          {/* Progress */}
+          {busy && (
             <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Uploading video to cloud...</span>
-                <span>{uploadProgress}%</span>
+              <div className="flex justify-between text-xs sm:text-sm">
+                <span className={dm ? 'text-gray-300' : 'text-gray-700'}>Uploading video to cloud...</span>
+                <span className={dm ? 'text-gray-300' : 'text-gray-700'}>{progress}%</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                />
+              <div className={`w-full rounded-full h-2 ${dm ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                <div className="bg-blue-600 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
               </div>
             </div>
           )}
+        </div>
 
-          <div className="flex items-center gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-semibold"
-              disabled={isUploading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-              disabled={isUploading}
-            >
-              {isUploading ? (
-                <>
-                  <Loader className="w-5 h-5 animate-spin" />
-                  Uploading... {uploadProgress}%
-                </>
-              ) : (
-                'Upload Video'
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className={`p-4 sm:p-6 border-t-2 flex gap-2 sm:gap-3 flex-shrink-0 ${dm ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}`}>
+          <button type="button" onClick={onClose} disabled={busy}
+            className={`flex-1 px-4 sm:px-6 py-2.5 sm:py-3 border-2 rounded-xl transition font-semibold text-sm sm:text-base disabled:opacity-50 ${dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+            Cancel
+          </button>
+          <button type="submit" disabled={busy}
+            className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl hover:shadow-lg transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base">
+            {busy ? <><Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />Uploading... {progress}%</> : 'Upload Video'}
+          </button>
+        </div>
+      </form>
+    </ModalWrap>
   );
 }
 
-// ✅ EditVideoModal
-function EditVideoModal({ video, onClose, onUpdate }: any) {
-  const [formData, setFormData] = useState({
-    title: video.title,
-    description: video.description || '',
-    thumbnailUrl: video.thumbnail || ''
-  });
-  const [isUpdating, setIsUpdating] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsUpdating(true);
-    await onUpdate(video.id, formData);
-    setIsUpdating(false);
-  };
+// ═════════════════════════════════════════════════════════════════════════════
+// EditVideoModal
+// ═════════════════════════════════════════════════════════════════════════════
+function EditVideoModal({ video, darkMode: dm, onClose, onUpdate }: any) {
+  const [formData, setFormData] = useState({ title: video.title, description: video.description || '', thumbnailUrl: video.thumbnail || '' });
+  const [busy, setBusy] = useState(false);
+  const handleSubmit = async (e: React.FormEvent) => { e.preventDefault(); setBusy(true); await onUpdate(video.id, formData); setBusy(false); };
+  const set = (k: string) => (v: any) => setFormData(p => ({ ...p, [k]: v }));
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="text-2xl font-bold text-gray-900">Edit Video</h3>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
-            <X className="w-6 h-6 text-gray-400" />
-          </button>
+    <ModalWrap dm={dm}>
+      <div className={`p-4 sm:p-6 border-b-2 flex items-center justify-between flex-shrink-0 ${dm ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50'}`}>
+        <div>
+          <h3 className={`text-xl sm:text-2xl font-bold ${dm ? 'text-white' : 'text-gray-900'}`}>Edit Video</h3>
+          <p className={`text-xs sm:text-sm mt-0.5 ${dm ? 'text-gray-400' : 'text-gray-600'}`}>Update video details</p>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Video Title *</label>
-            <input
-              type="text"
-              required
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea
-              rows={4}
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Video Thumbnail</label>
-            <SimpleVideoThumbnailUpload
-              onUpload={(url) => setFormData({ ...formData, thumbnailUrl: url })}
-              currentUrl={formData.thumbnailUrl}
-              label="video thumbnail"
-            />
-          </div>
-
-          <div className="flex items-center gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isUpdating}
-              className="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-semibold disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isUpdating}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:shadow-lg transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {isUpdating ? (
-                <>
-                  <Loader className="w-5 h-5 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                'Update Video'
-              )}
-            </button>
-          </div>
-        </form>
+        <button onClick={onClose} className={`p-2 rounded-xl transition flex-shrink-0 ${dm ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+          <X className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
       </div>
-    </div>
+      <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
+          <Field label="Video Title" value={formData.title} onChange={set('title')} required dm={dm} />
+          <TextareaField label="Description" value={formData.description} onChange={set('description')} rows={4} dm={dm} />
+          <div>
+            <label className={`block text-xs sm:text-sm font-medium mb-1.5 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Video Thumbnail</label>
+            <SimpleImageUpload onUpload={set('thumbnailUrl')} currentUrl={formData.thumbnailUrl} label="video thumbnail" endpoint="videoThumbnail" accent="blue" dm={dm} />
+          </div>
+        </div>
+        <ModalFooter onClose={onClose} loading={busy} saveLabel="Update Video" loadLabel="Updating..." dm={dm} />
+      </form>
+    </ModalWrap>
   );
 }
