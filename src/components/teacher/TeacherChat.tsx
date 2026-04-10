@@ -455,7 +455,7 @@ function MessageBubble({
   darkMode: boolean;
   editingId: string | null;
   editingContent: string;
-  editInputRef: React.RefObject<HTMLInputElement>;
+  editInputRef: React.RefObject<HTMLInputElement | null>;  // ← FIXED: Added | null
   savingEdit: boolean;
   onDelete: (id: string) => void;
   onCopy: (content: string) => void;
