@@ -3,8 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from "@/lib/prisma";
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
 import crypto from "crypto";
 import Razorpay from "razorpay";
 
@@ -39,15 +37,12 @@ export const HARDCOPY_PRICE = 30;
 // ── Helper function to generate payment proof HTML ──
 function getPaymentProofHtml(paymentProofUrl: string | null): string {
   if (!paymentProofUrl) return '';
-  const fullUrl = paymentProofUrl.startsWith('http') 
-    ? paymentProofUrl 
-    : `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}${paymentProofUrl}`;
   
   return `
     <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: center;">
       <h3 style="margin-top: 0; color: #1f2937;">📸 Payment Proof</h3>
       <p style="margin-bottom: 10px;">Customer has uploaded a payment screenshot:</p>
-      <a href="${fullUrl}" target="_blank" style="display: inline-block; background: #7c3aed; color: white; text-decoration: none; padding: 10px 20px; border-radius: 8px; margin: 10px 0;">
+      <a href="${paymentProofUrl}" target="_blank" style="display: inline-block; background: #7c3aed; color: white; text-decoration: none; padding: 10px 20px; border-radius: 8px; margin: 10px 0;">
         🔍 View Payment Screenshot
       </a>
       <p style="font-size: 12px; color: #6b7280; margin-top: 10px;">The image will open in a new tab</p>
@@ -92,7 +87,7 @@ async function sendEmailViaBrevo(
   }
 }
 
-// Helper function to send order notification with FULL order ID and payment method
+// Helper function to send order notification
 async function sendOrderNotification(
   to: string,
   toName: string,
@@ -124,12 +119,10 @@ async function sendOrderNotification(
 
   const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
   
-  // Payment method display
   const paymentMethodDisplay = paymentMethod === 'qr' ? 'QR Code Payment (UPI)' : paymentMethod === 'cod' ? 'Cash on Delivery' : 'Pending';
   const paymentMethodColor = paymentMethod === 'qr' ? '#7c3aed' : paymentMethod === 'cod' ? '#10b981' : '#f59e0b';
   const paymentMethodIcon = paymentMethod === 'qr' ? '📱' : paymentMethod === 'cod' ? '💵' : '⏳';
   
-  // Payment proof HTML for admin
   const paymentProofHtml = isAdmin && paymentMethod === 'qr' && paymentProofUrl
     ? getPaymentProofHtml(paymentProofUrl)
     : '';
@@ -167,7 +160,6 @@ async function sendOrderNotification(
               : `Thank you for your order! Your order has been received and is pending admin approval.`}
           </p>
 
-          <!-- Payment Method Badge -->
           <div style="background: ${paymentMethodColor}10; border: 2px solid ${paymentMethodColor}; border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
             <p style="margin: 0; font-size: 16px; font-weight: 700; color: ${paymentMethodColor};">
               ${paymentMethodIcon} Payment Method: ${paymentMethodDisplay}
@@ -419,61 +411,6 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     
-    // Check if it's file upload (multipart form data for QR payment proof)
-    const contentType = req.headers.get('content-type') || '';
-    if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
-      const proof = formData.get('proof') as File;
-      const orderId = formData.get('orderId') as string;
-
-      if (!proof || !orderId) {
-        return NextResponse.json({ error: "Missing proof or orderId" }, { status: 400 });
-      }
-
-      // Save proof file
-      const bytes = await proof.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      const uploadDir = path.join(process.cwd(), 'public/uploads/payment-proofs');
-      await mkdir(uploadDir, { recursive: true });
-      const filename = `${orderId}_${Date.now()}_${proof.name}`;
-      const filepath = path.join(uploadDir, filename);
-      await writeFile(filepath, buffer);
-      const proofUrl = `/uploads/payment-proofs/${filename}`;
-
-      // Update order with payment proof
-      await prisma.order.update({
-        where: { id: orderId },
-        data: { paymentProof: proofUrl },
-      });
-
-      // Get order details
-      const order = await prisma.order.findUnique({ where: { id: orderId } });
-      if (order) {
-        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-        const proofHtml = getPaymentProofHtml(proofUrl);
-        
-        // Send email to admin with payment proof image
-        await sendEmailViaBrevo(
-          process.env.ADMIN_EMAIL || 'saquibnadeem0@gmail.com',
-          'Admin',
-          `💰 Payment Proof Uploaded - Order #${orderId.slice(0, 8)}`,
-          `<h2>💰 Payment Proof Uploaded</h2>
-           <p><strong>Order ID:</strong> ${orderId}</p>
-           <p><strong>Customer:</strong> ${order.userName || order.userEmail}</p>
-           <p><strong>Amount:</strong> ₹${order.total.toLocaleString('en-IN')}</p>
-           <p><strong>Payment Method:</strong> QR Code Payment</p>
-           ${proofHtml}
-           <div style="margin-top: 20px; text-align: center;">
-             <a href="${baseUrl}/api/payments?action=approve-order&orderId=${orderId}" style="background: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-right: 10px;">✅ Approve Order</a>
-             <a href="${baseUrl}/api/payments?action=reject-order&orderId=${orderId}" style="background: #ef4444; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">❌ Reject Order</a>
-           </div>`,
-          `Payment proof uploaded for order ${orderId}\nView at: ${baseUrl}${proofUrl}`
-        );
-      }
-
-      return NextResponse.json({ success: true });
-    }
-
     // JSON requests
     const body = await req.json();
     const { action } = body;
@@ -498,6 +435,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, discount, label: coupon.label, code: upper });
     }
 
+    // ── Update payment proof (from UploadThing) ──
+    if (action === "update-payment-proof") {
+      const { orderId, proofUrl } = body;
+      
+      if (!orderId || !proofUrl) {
+        return NextResponse.json({ error: "Missing orderId or proofUrl" }, { status: 400 });
+      }
+      
+      const order = await prisma.order.update({
+        where: { id: orderId },
+        data: { paymentProof: proofUrl },
+      });
+      
+      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+      const proofHtml = getPaymentProofHtml(proofUrl);
+      
+      await sendEmailViaBrevo(
+        process.env.ADMIN_EMAIL || 'saquibnadeem0@gmail.com',
+        'Admin',
+        `💰 Payment Proof Uploaded - Order #${orderId.slice(0, 8)}`,
+        `<h2>💰 Payment Proof Uploaded</h2>
+         <p><strong>Order ID:</strong> ${orderId}</p>
+         <p><strong>Customer:</strong> ${order.userName || order.userEmail}</p>
+         <p><strong>Amount:</strong> ₹${order.total.toLocaleString('en-IN')}</p>
+         <p><strong>Payment Method:</strong> QR Code Payment</p>
+         ${proofHtml}
+         <div style="margin-top: 20px; text-align: center;">
+           <a href="${baseUrl}/api/payments?action=approve-order&orderId=${orderId}" style="background: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-right: 10px;">✅ Approve Order</a>
+           <a href="${baseUrl}/api/payments?action=reject-order&orderId=${orderId}" style="background: #ef4444; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">❌ Reject Order</a>
+         </div>`,
+        `Payment proof uploaded for order ${orderId}\nView at: ${proofUrl}`
+      );
+      
+      return NextResponse.json({ success: true });
+    }
+
     // ── Create order (QR/COD) ──
     if (action === "create-order") {
       const { items, subtotal, couponDiscount, total, couponCode, address, userEmail, paymentMethod } = body;
@@ -508,7 +481,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "User email required" }, { status: 401 });
       }
 
-      // Create order in database with payment method
       const order = await prisma.order.create({
         data: {
           userId: session?.user?.id || null,
@@ -526,7 +498,6 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Send confirmation email to user with payment method
       await sendOrderNotification(
         email,
         address?.name || session?.user?.name || 'Customer',
@@ -539,7 +510,6 @@ export async function POST(req: NextRequest) {
         null
       );
 
-      // Notify admin with payment method
       await sendOrderNotification(
         process.env.ADMIN_EMAIL || 'saquibnadeem0@gmail.com',
         'Admin',

@@ -185,7 +185,20 @@ chatDocument: f({
   .onUploadComplete(async ({ metadata, file }) => {
     console.log("Chat document uploaded:", file.url);
     return { url: file.url };
-  }),
+  }),paymentProof: f({ 
+    image: { maxFileSize: "8MB", maxFileCount: 1 } 
+  })
+    .middleware(async () => {
+      const session = await getServerSession(authOptions);
+      if (!session?.user) {
+        throw new Error("Unauthorized - Please sign in");
+      }
+      return { userId: session.user.id, email: session.user.email };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      console.log("📸 Payment proof uploaded:", file.url);
+      return { url: file.url };
+    }),
   
   // Profile avatar uploader
   profileAvatar: f({ image: { maxFileSize: "2MB", maxFileCount: 1 } })
