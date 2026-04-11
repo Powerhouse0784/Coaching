@@ -1,4 +1,4 @@
-// app/api/payments/route.ts - COMPLETE UPDATED VERSION
+// app/api/payments/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
@@ -35,6 +35,25 @@ export const COUPONS: Record<string, { type: "percent" | "flat"; value: number; 
 };
 
 export const HARDCOPY_PRICE = 30;
+
+// ── Helper function to generate payment proof HTML ──
+function getPaymentProofHtml(paymentProofUrl: string | null): string {
+  if (!paymentProofUrl) return '';
+  const fullUrl = paymentProofUrl.startsWith('http') 
+    ? paymentProofUrl 
+    : `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}${paymentProofUrl}`;
+  
+  return `
+    <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: center;">
+      <h3 style="margin-top: 0; color: #1f2937;">📸 Payment Proof</h3>
+      <p style="margin-bottom: 10px;">Customer has uploaded a payment screenshot:</p>
+      <a href="${fullUrl}" target="_blank" style="display: inline-block; background: #7c3aed; color: white; text-decoration: none; padding: 10px 20px; border-radius: 8px; margin: 10px 0;">
+        🔍 View Payment Screenshot
+      </a>
+      <p style="font-size: 12px; color: #6b7280; margin-top: 10px;">The image will open in a new tab</p>
+    </div>
+  `;
+}
 
 // ── Email function using Brevo API ──
 async function sendEmailViaBrevo(
@@ -73,19 +92,21 @@ async function sendEmailViaBrevo(
   }
 }
 
-// Helper function to send order notification with FULL order ID
+// Helper function to send order notification with FULL order ID and payment method
 async function sendOrderNotification(
   to: string,
   toName: string,
-  orderId: string,  // Now receives FULL order ID
+  orderId: string,
   total: number,
   items: any[],
   address: any,
-  isAdmin: boolean = false
+  paymentMethod: string | null,
+  isAdmin: boolean = false,
+  paymentProofUrl: string | null = null
 ) {
   const itemsHtml = items.map((item: any) => `
     <tr>
-      <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.name}${item.qty ? ` × ${item.qty}` : ''}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.name}${item.qty ? ` × ${item.qty}` : ''}${item.unitPrice ? ` @ ₹${item.unitPrice}` : ''}</td>
       <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">₹${item.price.toLocaleString('en-IN')}</td>
     </tr>
   `).join('');
@@ -103,10 +124,19 @@ async function sendOrderNotification(
 
   const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
   
-  // Use FULL order ID in subject and body
+  // Payment method display
+  const paymentMethodDisplay = paymentMethod === 'qr' ? 'QR Code Payment (UPI)' : paymentMethod === 'cod' ? 'Cash on Delivery' : 'Pending';
+  const paymentMethodColor = paymentMethod === 'qr' ? '#7c3aed' : paymentMethod === 'cod' ? '#10b981' : '#f59e0b';
+  const paymentMethodIcon = paymentMethod === 'qr' ? '📱' : paymentMethod === 'cod' ? '💵' : '⏳';
+  
+  // Payment proof HTML for admin
+  const paymentProofHtml = isAdmin && paymentMethod === 'qr' && paymentProofUrl
+    ? getPaymentProofHtml(paymentProofUrl)
+    : '';
+  
   const emailSubject = isAdmin 
-    ? `🛍️ New Order #${orderId} - Action Required`  // FULL ID for admin
-    : `🎉 Order Confirmation #${orderId}`;  // FULL ID for user
+    ? `🛍️ New Order #${orderId.slice(0, 8)} - ${paymentMethodDisplay} - Action Required`
+    : `🎉 Order Confirmation #${orderId.slice(0, 8)}`;
 
   const html = `
     <!DOCTYPE html>
@@ -133,9 +163,18 @@ async function sendOrderNotification(
           </p>
           <p style="color: #6b7280; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
             ${isAdmin 
-              ? `A new order has been placed and requires your review. Please approve or reject this order.`
+              ? `A new order has been placed and requires your review.`
               : `Thank you for your order! Your order has been received and is pending admin approval.`}
           </p>
+
+          <!-- Payment Method Badge -->
+          <div style="background: ${paymentMethodColor}10; border: 2px solid ${paymentMethodColor}; border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
+            <p style="margin: 0; font-size: 16px; font-weight: 700; color: ${paymentMethodColor};">
+              ${paymentMethodIcon} Payment Method: ${paymentMethodDisplay}
+            </p>
+            ${isAdmin && paymentMethod === 'cod' ? '<p style="margin: 8px 0 0; font-size: 12px; color: #92400e;">⚠️ Cash on Delivery - Verify customer details before approving</p>' : ''}
+            ${isAdmin && paymentMethod === 'qr' ? '<p style="margin: 8px 0 0; font-size: 12px; color: #92400e;">📱 QR Payment - Check payment proof before approving</p>' : ''}
+          </div>
 
           <div style="background: #f9fafb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
             <p style="margin: 0 0 8px;"><strong>Order ID:</strong> <span style="font-family: monospace; font-size: 14px; font-weight: bold;">${orderId}</span></p>
@@ -154,6 +193,8 @@ async function sendOrderNotification(
           </div>
 
           ${addressHtml}
+          
+          ${paymentProofHtml}
 
           ${isAdmin ? `
             <div style="margin-top: 24px; text-align: center;">
@@ -193,7 +234,7 @@ async function sendOrderNotification(
     </html>
   `;
 
-  const text = `Order ${orderId}\nTotal: ₹${total.toLocaleString('en-IN')}\n\nItems:\n${items.map((item: any) => `- ${item.name}: ₹${item.price}`).join('\n')}`;
+  const text = `Order ${orderId}\nPayment Method: ${paymentMethodDisplay}\nTotal: ₹${total.toLocaleString('en-IN')}\n\nItems:\n${items.map((item: any) => `- ${item.name}: ₹${item.price}`).join('\n')}`;
 
   await sendEmailViaBrevo(to, toName, emailSubject, html, text);
 }
@@ -215,7 +256,6 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const action = searchParams.get("action");
     let orderId = searchParams.get("orderId");
-    const status = searchParams.get("status");
 
     // Handle approve/reject from email links
     if ((action === "approve-order" || action === "reject-order") && orderId) {
@@ -226,10 +266,10 @@ export async function GET(req: NextRequest) {
         data: { status: newStatus },
       });
 
-      // Send notification to user with FULL order ID
+      const paymentMethodDisplay = order.paymentMethod === 'qr' ? 'QR Code Payment' : order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Pending';
       const subject = newStatus === 'approved' 
-        ? `✅ Order #${order.id} Approved!` 
-        : `❌ Order #${order.id} Update`;
+        ? `✅ Order #${order.id.slice(0, 8)} Approved!` 
+        : `❌ Order #${order.id.slice(0, 8)} Update`;
 
       const html = `
         <!DOCTYPE html>
@@ -244,7 +284,8 @@ export async function GET(req: NextRequest) {
           </div>
           <div style="padding: 20px;">
             <p>Dear ${order.userName || 'Customer'},</p>
-            <p>Your order <strong>#${order.id}</strong> has been <strong>${newStatus}</strong>.</p>
+            <p>Your order <strong>#${order.id.slice(0, 8)}</strong> has been <strong>${newStatus}</strong>.</p>
+            <p><strong>Payment Method:</strong> ${paymentMethodDisplay}</p>
             ${newStatus === 'approved' 
               ? '<p>Your order will be processed and delivered soon.</p>' 
               : '<p>Please contact support for more information or to resolve any issues.</p>'}
@@ -333,27 +374,18 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Order status tracking - supports FULL or PARTIAL ID
+    // Order status tracking
     if (action === "order-status") {
       if (!orderId || orderId.trim().length === 0) {
         return NextResponse.json({ error: "orderId required" }, { status: 400 });
       }
 
       let order = null;
+      order = await prisma.order.findUnique({ where: { id: orderId } });
       
-      // Try exact match first
-      order = await prisma.order.findUnique({
-        where: { id: orderId },
-      });
-      
-      // If not found and ID length is at least 8, try startsWith (for partial IDs)
       if (!order && orderId.length >= 8) {
         const orders = await prisma.order.findMany({
-          where: {
-            id: {
-              startsWith: orderId,
-            },
-          },
+          where: { id: { startsWith: orderId } },
           take: 1,
         });
         order = orders[0] || null;
@@ -363,23 +395,6 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "Order not found" }, { status: 404 });
       }
       return NextResponse.json({ success: true, order });
-    }
-
-    // Debug endpoint - list recent orders with FULL IDs
-    if (action === "debug-orders" && process.env.NODE_ENV === 'development') {
-      const recentOrders = await prisma.order.findMany({
-        take: 10,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          userName: true,
-          userEmail: true,
-          total: true,
-          status: true,
-          createdAt: true,
-        },
-      });
-      return NextResponse.json({ success: true, orders: recentOrders });
     }
 
     // Admin orders
@@ -423,31 +438,36 @@ export async function POST(req: NextRequest) {
       const filename = `${orderId}_${Date.now()}_${proof.name}`;
       const filepath = path.join(uploadDir, filename);
       await writeFile(filepath, buffer);
+      const proofUrl = `/uploads/payment-proofs/${filename}`;
 
       // Update order with payment proof
       await prisma.order.update({
         where: { id: orderId },
-        data: { paymentProof: `/uploads/payment-proofs/${filename}` },
+        data: { paymentProof: proofUrl },
       });
 
-      // Notify admin about payment proof
+      // Get order details
       const order = await prisma.order.findUnique({ where: { id: orderId } });
       if (order) {
         const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        const proofHtml = getPaymentProofHtml(proofUrl);
+        
+        // Send email to admin with payment proof image
         await sendEmailViaBrevo(
           process.env.ADMIN_EMAIL || 'saquibnadeem0@gmail.com',
           'Admin',
-          `💰 Payment Proof Uploaded - Order #${orderId}`,
-          `<h2>Payment Proof Uploaded</h2>
-           <p>Order ID: <strong>${orderId}</strong></p>
-           <p>Customer: ${order.userName || order.userEmail}</p>
-           <p>Amount: ₹${order.total.toLocaleString('en-IN')}</p>
-           <p>Please review the payment proof and approve/reject the order.</p>
-           <div style="margin-top: 20px;">
+          `💰 Payment Proof Uploaded - Order #${orderId.slice(0, 8)}`,
+          `<h2>💰 Payment Proof Uploaded</h2>
+           <p><strong>Order ID:</strong> ${orderId}</p>
+           <p><strong>Customer:</strong> ${order.userName || order.userEmail}</p>
+           <p><strong>Amount:</strong> ₹${order.total.toLocaleString('en-IN')}</p>
+           <p><strong>Payment Method:</strong> QR Code Payment</p>
+           ${proofHtml}
+           <div style="margin-top: 20px; text-align: center;">
              <a href="${baseUrl}/api/payments?action=approve-order&orderId=${orderId}" style="background: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-right: 10px;">✅ Approve Order</a>
              <a href="${baseUrl}/api/payments?action=reject-order&orderId=${orderId}" style="background: #ef4444; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">❌ Reject Order</a>
            </div>`,
-          `Payment proof uploaded for order ${orderId}`
+          `Payment proof uploaded for order ${orderId}\nView at: ${baseUrl}${proofUrl}`
         );
       }
 
@@ -480,7 +500,7 @@ export async function POST(req: NextRequest) {
 
     // ── Create order (QR/COD) ──
     if (action === "create-order") {
-      const { items, subtotal, couponDiscount, total, couponCode, address, userEmail } = body;
+      const { items, subtotal, couponDiscount, total, couponCode, address, userEmail, paymentMethod } = body;
 
       const email = session?.user?.email || userEmail;
       
@@ -488,7 +508,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "User email required" }, { status: 401 });
       }
 
-      // Create order in database
+      // Create order in database with payment method
       const order = await prisma.order.create({
         data: {
           userId: session?.user?.id || null,
@@ -498,7 +518,7 @@ export async function POST(req: NextRequest) {
           total,
           couponCode: couponCode || null,
           address: address || null,
-          paymentMethod: null,
+          paymentMethod: paymentMethod,
           status: 'pending',
           userEmail: email,
           userName: address?.name || session?.user?.name || null,
@@ -506,190 +526,35 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Send confirmation email to user with FULL order ID
+      // Send confirmation email to user with payment method
       await sendOrderNotification(
         email,
         address?.name || session?.user?.name || 'Customer',
-        order.id,  // Send FULL ID
+        order.id,
         total,
         items,
         address,
-        false
+        paymentMethod,
+        false,
+        null
       );
 
-      // Notify admin with FULL order ID
+      // Notify admin with payment method
       await sendOrderNotification(
         process.env.ADMIN_EMAIL || 'saquibnadeem0@gmail.com',
         'Admin',
-        order.id,  // Send FULL ID
+        order.id,
         total,
         items,
         address,
-        true
+        paymentMethod,
+        true,
+        null
       );
 
-      console.log(`✅ Order created: ${order.id} for ${email}`);
+      console.log(`✅ Order created: ${order.id} for ${email} | Payment: ${paymentMethod}`);
 
       return NextResponse.json({ success: true, order });
-    }
-
-    // ── Confirm COD order ──
-    if (action === "confirm-cod") {
-      const { orderId } = body;
-
-      const order = await prisma.order.update({
-        where: { id: orderId },
-        data: { 
-          paymentMethod: 'cod',
-          status: 'pending'
-        },
-      });
-
-      // Send COD confirmation to admin with FULL order ID
-      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-      await sendEmailViaBrevo(
-        process.env.ADMIN_EMAIL || 'saquibnadeem0@gmail.com',
-        'Admin',
-        `📦 COD Order #${order.id} - Pending Approval`,
-        `<h2>COD Order Needs Approval</h2>
-         <p><strong>Order ID:</strong> <code style="font-family: monospace; font-size: 14px;">${order.id}</code></p>
-         <p><strong>Customer:</strong> ${order.userName || order.userEmail}</p>
-         <p><strong>Phone:</strong> ${order.userPhone || 'N/A'}</p>
-         <p><strong>Total:</strong> ₹${order.total.toLocaleString('en-IN')}</p>
-         <p><strong>Payment Method:</strong> Cash on Delivery</p>
-         <h3>Items:</h3>
-         <ul>${(order.items as any[]).map((item: any) => `<li>${item.name} - ₹${item.price.toLocaleString('en-IN')}</li>`).join('')}</ul>
-         <div style="margin-top: 20px;">
-           <a href="${baseUrl}/api/payments?action=approve-order&orderId=${order.id}" style="background: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-right: 10px;">✅ Approve Order</a>
-           <a href="${baseUrl}/api/payments?action=reject-order&orderId=${order.id}" style="background: #ef4444; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">❌ Reject Order</a>
-         </div>`,
-        `COD order ${order.id} needs approval`
-      );
-
-      return NextResponse.json({ success: true });
-    }
-
-    // ── Admin: Approve/Reject Order (JSON endpoint) ──
-    if (action === "admin-update-order" && session?.user?.email === process.env.ADMIN_EMAIL) {
-      const { orderId, status, rejectionReason } = body;
-
-      const order = await prisma.order.update({
-        where: { id: orderId },
-        data: { status, rejectionReason: rejectionReason || null },
-      });
-
-      const emailSubject = status === 'approved' 
-        ? `✅ Order #${order.id} Approved!` 
-        : `❌ Order #${order.id} Update`;
-
-      const html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Order ${status === 'approved' ? 'Approved' : 'Update'}</title>
-        </head>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: ${status === 'approved' ? '#10b981' : '#ef4444'}; color: white; padding: 20px; text-align: center; border-radius: 10px;">
-            <h1 style="margin: 0;">Order ${status === 'approved' ? 'Approved! ✅' : 'Update'}</h1>
-          </div>
-          <div style="padding: 20px;">
-            <p>Dear ${order.userName || 'Customer'},</p>
-            <p>Your order <strong>#${order.id}</strong> has been <strong>${status}</strong>.</p>
-            ${status === 'approved' 
-              ? '<p>Your order will be processed and delivered soon.</p>' 
-              : `<p>Reason: ${rejectionReason || 'Please contact support for more information.'}</p>`}
-            <p>Thank you for choosing Intense Learners!</p>
-          </div>
-        </body>
-        </html>
-      `;
-
-      await sendEmailViaBrevo(
-        order.userEmail,
-        order.userName || 'Customer',
-        emailSubject,
-        html,
-        `Your order ${order.id} has been ${status}`
-      );
-
-      return NextResponse.json({ success: true });
-    }
-
-    // ── Razorpay order creation (keep for backward compatibility) ──
-    if (action === "create-razorpay-order") {
-      const { items, couponCode } = body;
-      
-      let serverSubtotal = 0;
-      for (const item of items) {
-        if (item.type === "fee") {
-          const plan = FEE_PLANS.find((p) => p.id === item.id);
-          if (!plan) return NextResponse.json({ error: `Invalid plan: ${item.id}` }, { status: 400 });
-          serverSubtotal += plan.price;
-        } else if (item.type === "hardcopy") {
-          const qty = item.qty || 1;
-          serverSubtotal += HARDCOPY_PRICE * qty;
-        }
-      }
-
-      let couponDiscount = 0;
-      if (couponCode) {
-        const upper = couponCode.toUpperCase().trim();
-        const coupon = COUPONS[upper];
-        if (coupon && serverSubtotal >= coupon.minOrder) {
-          couponDiscount = coupon.type === "percent"
-            ? Math.floor(serverSubtotal * coupon.value / 100)
-            : Math.min(coupon.value, serverSubtotal);
-        }
-      }
-
-      const totalAmount = Math.max(serverSubtotal - couponDiscount, 0);
-
-      const razorpay = getRazorpay();
-      const rzpOrder = await razorpay.orders.create({
-        amount: totalAmount * 100,
-        currency: "INR",
-        receipt: `rcpt_${Date.now()}`,
-        notes: {
-          studentEmail: session?.user?.email || "",
-          coupon: couponCode || "none",
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-          orderId: rzpOrder.id,
-          amount: totalAmount,
-          currency: "INR",
-          description: `Intense Learners — ${items.length} item(s)`,
-          prefillEmail: session?.user?.email || "",
-          prefillName: session?.user?.name || "",
-        },
-      });
-    }
-
-    // ── Verify Razorpay payment ──
-    if (action === "verify-payment") {
-      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
-
-      const expectedSignature = crypto
-        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
-        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-        .digest("hex");
-
-      if (expectedSignature !== razorpay_signature) {
-        return NextResponse.json({ error: "Payment verification failed" }, { status: 400 });
-      }
-
-      console.log(`✅ Payment verified: ${razorpay_payment_id}`);
-
-      return NextResponse.json({
-        success: true,
-        paymentId: razorpay_payment_id,
-        message: "Payment successful",
-      });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

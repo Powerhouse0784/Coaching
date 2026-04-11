@@ -1,7 +1,7 @@
 // app/payment-checkout/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import {
   CreditCard, Tag, Lock, CheckCircle, X, Sparkles,
@@ -42,7 +42,7 @@ interface Note {
   isPinned: boolean;
   downloads: number;
   views: number;
-  price: number;  // Added price field for hardcopy
+  price: number;
   teacher: { name: string | null; avatar: string | null };
 }
 
@@ -54,7 +54,7 @@ interface CartItem {
   qty?: number;
   subject?: string;
   class?: string;
-  unitPrice?: number; // For hardcopy, store the per-copy price
+  unitPrice?: number;
 }
 
 interface AddressForm {
@@ -82,7 +82,6 @@ interface Order {
   paymentProof?: string;
 }
 
-// ─── Subject colour map ───────────────────────────────────────────────────────
 const SUB_COLOR: Record<string, { light: string; dark: string; dot: string; grad: string }> = {
   Mathematics:  { light: 'bg-blue-100 text-blue-700 border-blue-200',    dark: 'bg-blue-900/40 text-blue-300 border-blue-800',    dot: 'bg-blue-500',    grad: 'from-blue-500 to-cyan-600'       },
   Physics:      { light: 'bg-violet-100 text-violet-700 border-violet-200', dark: 'bg-violet-900/40 text-violet-300 border-violet-800', dot: 'bg-violet-500', grad: 'from-violet-500 to-purple-600'  },
@@ -102,11 +101,9 @@ function getSubColor(sub: string, dm: boolean) {
 function getGrad(sub: string) { return SUB_COLOR[sub]?.grad || 'from-gray-500 to-gray-600'; }
 function fmt(n: number) { return n.toLocaleString('en-IN'); }
 
-// ─────────────────────────────────────────────────────────────────────────────
 export default function PaymentCheckout() {
   const { data: session } = useSession();
 
-  // Dark mode
   const [dm, setDm] = useState(false);
   useEffect(() => {
     const check = () => setDm(document.documentElement.classList.contains('dark'));
@@ -116,39 +113,29 @@ export default function PaymentCheckout() {
     return () => obs.disconnect();
   }, []);
 
-  // Tab
   const [tab, setTab] = useState<'fees' | 'hardcopy' | 'cart'>('fees');
-
-  // Fee plans from API
   const [feePlans, setFeePlans] = useState<FeePlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState<string>('');
-
-  // Notes from API
   const [notes, setNotes] = useState<Note[]>([]);
   const [notesLoading, setNotesLoading] = useState(true);
   const [noteSearch, setNoteSearch] = useState('');
   const [noteSubjectFilter, setNoteSubjectFilter] = useState('all');
   const [noteClassFilter, setNoteClassFilter] = useState('all');
-
-  // Cart
   const [selectedPlans, setSelectedPlans] = useState<Record<string, boolean>>({});
   const [hardcopyQty, setHardcopyQty] = useState<Record<string, number>>({});
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number; label: string } | null>(null);
   const [couponError, setCouponError] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
-
-  // Address
   const [showAddress, setShowAddress] = useState(false);
   const [address, setAddress] = useState<AddressForm>({ 
     name: '', phone: '', email: session?.user?.email || '', 
     address: '', city: '', state: '', pincode: '', landmark: '' 
   });
-
-  // Payment
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'qr' | 'cod' | null>(null);
+  const [showOrderSummaryModal, setShowOrderSummaryModal] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState<Order | null>(null);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
@@ -156,11 +143,8 @@ export default function PaymentCheckout() {
   const [orderStatus, setOrderStatus] = useState<Order | null>(null);
   const [trackingOrderId, setTrackingOrderId] = useState('');
   const [showTrackModal, setShowTrackModal] = useState(false);
-
-  // Minimum order amount
   const MIN_ORDER_AMOUNT = 200;
 
-  // ── Fetch fee plans ──
   useEffect(() => {
     fetch('/api/payments?action=fee-plans')
       .then(r => r.json())
@@ -175,33 +159,25 @@ export default function PaymentCheckout() {
       .finally(() => setPlansLoading(false));
   }, []);
 
-  // ── Fetch notes for hardcopy (with price) ──
   useEffect(() => {
     fetch('/api/payments?action=notes')
       .then(r => r.json())
-      .then(d => { 
-        if (d.success) {
-          setNotes(d.notes);
-        }
-      })
+      .then(d => { if (d.success) setNotes(d.notes); })
       .catch(console.error)
       .finally(() => setNotesLoading(false));
   }, []);
 
-  // ── Derived data ──
   const classes = [...new Set(feePlans.map(p => p.class))];
   const plansForClass = feePlans.filter(p => p.class === selectedClass);
-
   const noteSubjects = ['all', ...new Set(notes.map(n => n.subject))];
-  const noteClasses  = ['all', ...new Set(notes.map(n => n.class))];
+  const noteClasses = ['all', ...new Set(notes.map(n => n.class))];
   const filteredNotes = notes.filter(n => {
     const ms = noteSubjectFilter === 'all' || n.subject === noteSubjectFilter;
-    const mc = noteClassFilter   === 'all' || n.class   === noteClassFilter;
+    const mc = noteClassFilter === 'all' || n.class === noteClassFilter;
     const mq = !noteSearch || n.title.toLowerCase().includes(noteSearch.toLowerCase()) || n.subject.toLowerCase().includes(noteSearch.toLowerCase());
     return ms && mc && mq;
   });
 
-  // ── Cart items - NOW USING NOTE'S INDIVIDUAL PRICE ──
   const cartItems: CartItem[] = [
     ...feePlans.filter(p => selectedPlans[p.id]).map(p => ({
       id: p.id, type: 'fee' as const,
@@ -210,7 +186,7 @@ export default function PaymentCheckout() {
     })),
     ...Object.entries(hardcopyQty).filter(([, q]) => q > 0).map(([noteId, qty]) => {
       const note = notes.find(n => n.id === noteId);
-      const unitPrice = note?.price || 30; // Use note's price, fallback to 30
+      const unitPrice = note?.price || 30;
       return {
         id: noteId, type: 'hardcopy' as const,
         name: note?.title || 'Note',
@@ -229,7 +205,6 @@ export default function PaymentCheckout() {
   const hasOnlyFees = cartItems.length > 0 && cartItems.every(i => i.type === 'fee');
   const meetsMinOrder = total >= MIN_ORDER_AMOUNT;
 
-  // ── Coupon ──
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
     setCouponError('');
@@ -247,7 +222,6 @@ export default function PaymentCheckout() {
     finally { setCouponLoading(false); }
   };
 
-  // ── Track Order Handler ──
   const handleTrackOrder = async () => {
     if (!trackingOrderId) return;
     try {
@@ -265,7 +239,6 @@ export default function PaymentCheckout() {
     }
   };
 
-  // ── Open Payment Modal (No order created yet) ──
   const handleOpenPaymentModal = () => {
     if (cartItems.length === 0) return;
     if (!meetsMinOrder) {
@@ -282,11 +255,18 @@ export default function PaymentCheckout() {
     setShowPaymentModal(true);
   };
 
-  // ── Create Order After Payment Method Selection ──
-  const createOrderWithPaymentMethod = async (method: 'qr' | 'cod') => {
+  // Step 1: Select payment method
+  const selectPaymentMethod = (method: 'qr' | 'cod') => {
     setSelectedPaymentMethod(method);
-    setIsCreatingOrder(true);
+    setShowPaymentModal(false);
+    setShowOrderSummaryModal(true);
+  };
+
+  // Step 2: Place order after confirming summary
+  const placeOrder = async () => {
+    if (!selectedPaymentMethod) return;
     
+    setIsCreatingOrder(true);
     try {
       const res = await fetch('/api/payments', {
         method: 'POST',
@@ -300,36 +280,32 @@ export default function PaymentCheckout() {
           couponCode: appliedCoupon?.code || null,
           address: hasHardcopy ? address : null,
           userEmail: session?.user?.email,
-          paymentMethod: method,
+          paymentMethod: selectedPaymentMethod,
         }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       
       setOrderPlaced(data.order);
+      setShowOrderSummaryModal(false);
       
-      if (method === 'cod') {
+      if (selectedPaymentMethod === 'cod') {
         alert('Order placed successfully! You will receive confirmation via email after admin approval.');
-        setShowPaymentModal(false);
-        setOrderPlaced(null);
-        setSelectedPaymentMethod(null);
         // Reset cart
         setSelectedPlans({});
         setHardcopyQty({});
         setAppliedCoupon(null);
         setCouponCode('');
         setTab('fees');
+        setSelectedPaymentMethod(null);
       }
     } catch (error: any) {
       alert(error?.message || 'Failed to place order');
-      setShowPaymentModal(false);
-      setSelectedPaymentMethod(null);
     } finally {
       setIsCreatingOrder(false);
     }
   };
 
-  // ── Upload Payment Proof (for QR) ──
   const handleUploadProof = async () => {
     if (!paymentProof || !orderPlaced) return;
     setUploadingProof(true);
@@ -345,10 +321,8 @@ export default function PaymentCheckout() {
       const data = await res.json();
       if (data.success) {
         alert('Payment proof uploaded successfully! We will verify and confirm your order.');
-        setShowPaymentModal(false);
         setOrderPlaced(null);
         setSelectedPaymentMethod(null);
-        // Reset cart
         setSelectedPlans({});
         setHardcopyQty({});
         setAppliedCoupon(null);
@@ -364,96 +338,9 @@ export default function PaymentCheckout() {
     }
   };
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // PAYMENT MODAL - Order created AFTER selection
-  // ════════════════════════════════════════════════════════════════════════════
+  // Payment Method Selection Modal
   if (showPaymentModal) {
     const showCOD = !hasOnlyFees;
-
-    // If order is created and payment method is QR, show QR upload section
-    if (orderPlaced && selectedPaymentMethod === 'qr') {
-      return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl ${dm ? 'bg-gray-900' : 'bg-white'}`}>
-            <div className={`sticky top-0 z-10 p-4 sm:p-6 border-b-2 ${dm ? 'border-gray-800 bg-gray-900' : 'border-gray-100 bg-white'}`}>
-              <div className="flex items-center justify-between">
-                <h2 className={`text-xl sm:text-2xl font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Complete Payment</h2>
-                <button onClick={() => { setShowPaymentModal(false); setOrderPlaced(null); setSelectedPaymentMethod(null); }} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <p className={`text-xs sm:text-sm mt-1 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Order #{orderPlaced.id.slice(0, 8)} · Total: ₹{fmt(orderPlaced.total)}</p>
-            </div>
-
-            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-              {/* QR Section */}
-              <div className={`p-4 sm:p-6 rounded-2xl border-2 text-center ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-                <h3 className={`font-black text-base sm:text-lg mb-3 ${dm ? 'text-white' : 'text-gray-900'}`}>Scan & Pay</h3>
-                <div className="flex justify-center mb-4">
-                  <div className="w-40 h-40 sm:w-48 sm:h-48 bg-white rounded-2xl shadow-lg flex items-center justify-center p-3 sm:p-4">
-                    <img 
-                      src="/paytm-qr-placeholder.png" 
-                      alt="Paytm QR Code"
-                      className="w-full h-full object-contain"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                        const parent = (e.target as HTMLImageElement).parentElement;
-                        if (parent) {
-                          parent.innerHTML = '<div class="text-center"><QrCode className="w-16 h-16 sm:w-20 sm:h-20 text-gray-400 mx-auto mb-2"/><p class="text-xs sm:text-sm text-gray-500">Paytm QR Code</p><p class="text-[10px] sm:text-xs text-gray-400">UPI: 9810493309@ptsbi</p></div>';
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-                <p className={`text-xs sm:text-sm mb-4 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Scan this QR code using any UPI app and pay <span className="font-black text-violet-500">₹{fmt(orderPlaced.total)}</span>
-                </p>
-                
-                <div className="space-y-3">
-                  <div className={`p-2 sm:p-3 rounded-xl ${dm ? 'bg-gray-700' : 'bg-white'}`}>
-                    <p className={`text-[10px] sm:text-xs font-mono break-all ${dm ? 'text-gray-400' : 'text-gray-500'}`}>UPI ID: <span className="font-bold text-violet-500">9810493309@ptsbi</span></p>
-                  </div>
-                  
-                  <div className="border-t-2 pt-3 sm:pt-4">
-                    <label className={`block text-xs sm:text-sm font-bold mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Upload Payment Screenshot</label>
-                    <div className={`relative border-2 border-dashed rounded-xl p-3 sm:p-4 text-center cursor-pointer transition-all ${
-                      paymentProof 
-                        ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/20' 
-                        : dm ? 'border-gray-600 hover:border-violet-500' : 'border-gray-300 hover:border-violet-400'
-                    }`}>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                      <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-2 ${paymentProof ? 'text-violet-500' : dm ? 'text-gray-500' : 'text-gray-400'}`} />
-                      <p className={`text-xs sm:text-sm ${paymentProof ? 'text-violet-500 font-medium' : dm ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {paymentProof ? paymentProof.name.substring(0, 30) + (paymentProof.name.length > 30 ? '...' : '') : 'Click or drag to upload'}
-                      </p>
-                      <p className={`text-[10px] sm:text-xs mt-1 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>
-                        PNG, JPG up to 5MB
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleUploadProof}
-                    disabled={!paymentProof || uploadingProof}
-                    className="w-full py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-sm sm:text-base disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {uploadingProof ? <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <Send className="w-4 h-4 sm:w-5 sm:h-5" />}
-                    {uploadingProof ? 'Uploading...' : 'Submit Payment Proof'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Show payment method selection (order not created yet)
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
         <div className={`max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl ${dm ? 'bg-gray-900' : 'bg-white'}`}>
@@ -466,66 +353,224 @@ export default function PaymentCheckout() {
             </div>
             <p className={`text-xs sm:text-sm mt-1 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Total Amount: ₹{fmt(total)}</p>
           </div>
-
           <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {/* QR Payment */}
               <button
-                onClick={() => createOrderWithPaymentMethod('qr')}
-                disabled={isCreatingOrder}
-                className={`p-4 sm:p-5 rounded-2xl border-2 text-center transition-all ${
-                  isCreatingOrder ? 'opacity-50 cursor-not-allowed' : dm ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'
-                }`}
+                onClick={() => selectPaymentMethod('qr')}
+                className={`p-4 sm:p-5 rounded-2xl border-2 text-center transition-all ${dm ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'}`}
               >
                 <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-2 sm:mb-3 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
-                  {isCreatingOrder && selectedPaymentMethod === 'qr' ? (
-                    <Loader className="w-6 h-6 sm:w-8 sm:h-8 text-white animate-spin" />
-                  ) : (
-                    <QrCode className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
-                  )}
+                  <QrCode className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
                 </div>
                 <h3 className={`font-black text-sm sm:text-base mb-1 ${dm ? 'text-white' : 'text-gray-900'}`}>Pay via QR</h3>
                 <p className={`text-[10px] sm:text-xs ${dm ? 'text-gray-500' : 'text-gray-400'}`}>Scan & pay with any UPI app</p>
               </button>
-
-              {/* COD - Only if not only fees */}
               {showCOD && (
                 <button
-                  onClick={() => createOrderWithPaymentMethod('cod')}
-                  disabled={isCreatingOrder}
-                  className={`p-4 sm:p-5 rounded-2xl border-2 text-center transition-all ${
-                    isCreatingOrder ? 'opacity-50 cursor-not-allowed' : dm ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                  onClick={() => selectPaymentMethod('cod')}
+                  className={`p-4 sm:p-5 rounded-2xl border-2 text-center transition-all ${dm ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'}`}
                 >
                   <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-2 sm:mb-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                    {isCreatingOrder && selectedPaymentMethod === 'cod' ? (
-                      <Loader className="w-6 h-6 sm:w-8 sm:h-8 text-white animate-spin" />
-                    ) : (
-                      <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
-                    )}
+                    <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
                   </div>
                   <h3 className={`font-black text-sm sm:text-base mb-1 ${dm ? 'text-white' : 'text-gray-900'}`}>Cash on Delivery</h3>
                   <p className={`text-[10px] sm:text-xs ${dm ? 'text-gray-500' : 'text-gray-400'}`}>Pay when you receive</p>
                 </button>
               )}
             </div>
-
-            {hasOnlyFees && (
-              <div className={`p-3 sm:p-4 rounded-xl text-center ${dm ? 'bg-blue-950/30 border border-blue-800' : 'bg-blue-50 border border-blue-200'}`}>
-                <p className="text-xs sm:text-sm text-blue-600 dark:text-blue-400">
-                  💳 Only QR payment is available for fee plans.
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </div>
     );
   }
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // ORDER TRACKING MODAL - RESPONSIVE
-  // ════════════════════════════════════════════════════════════════════════════
+  // Order Summary Modal (before placing order)
+  // Order Summary Modal (before placing order) - IMPROVED DARK MODE
+if (showOrderSummaryModal && selectedPaymentMethod) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
+      <div className={`max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl ${dm ? 'bg-gray-900' : 'bg-white'}`}>
+        <div className={`sticky top-0 z-10 p-4 sm:p-6 border-b-2 ${dm ? 'border-gray-800 bg-gray-900' : 'border-gray-100 bg-white'}`}>
+          <div className="flex items-center justify-between">
+            <h2 className={`text-xl sm:text-2xl font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Confirm Order</h2>
+            <button onClick={() => { setShowOrderSummaryModal(false); setSelectedPaymentMethod(null); }} className={`p-2 rounded-xl transition ${dm ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+          {/* Payment Method Badge - Improved Dark Mode */}
+          <div className={`p-3 sm:p-4 rounded-xl border-2 ${
+            selectedPaymentMethod === 'qr' 
+              ? dm ? 'border-violet-700 bg-violet-950/50' : 'border-violet-200 bg-violet-50'
+              : dm ? 'border-emerald-700 bg-emerald-950/50' : 'border-emerald-200 bg-emerald-50'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                selectedPaymentMethod === 'qr' 
+                  ? dm ? 'bg-violet-800' : 'bg-violet-100'
+                  : dm ? 'bg-emerald-800' : 'bg-emerald-100'
+              }`}>
+                {selectedPaymentMethod === 'qr' 
+                  ? <QrCode className={`w-5 h-5 ${dm ? 'text-violet-400' : 'text-violet-600'}`} />
+                  : <DollarSign className={`w-5 h-5 ${dm ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                }
+              </div>
+              <div>
+                <p className={`font-bold ${dm ? 'text-white' : 'text-gray-900'}`}>
+                  {selectedPaymentMethod === 'qr' ? 'QR Code Payment' : 'Cash on Delivery'}
+                </p>
+                <p className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {selectedPaymentMethod === 'qr' ? 'Pay via UPI by scanning QR code' : 'Pay when you receive the order'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Order Summary - Improved Dark Mode */}
+          <div className={`rounded-xl border-2 overflow-hidden ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className={`p-3 sm:p-4 border-b-2 ${dm ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}`}>
+              <h3 className={`font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Order Summary</h3>
+            </div>
+            <div className="p-3 sm:p-4 space-y-2">
+              {cartItems.map((item, idx) => (
+                <div key={idx} className={`flex justify-between text-sm ${dm ? 'text-gray-300' : 'text-gray-600'}`}>
+                  <span>{item.name}{item.qty ? ` × ${item.qty}` : ''}</span>
+                  <span className={`font-medium ${dm ? 'text-white' : 'text-gray-900'}`}>₹{fmt(item.price)}</span>
+                </div>
+              ))}
+              <div className={`border-t ${dm ? 'border-gray-700' : 'border-gray-200'} pt-2 mt-2 space-y-1`}>
+                <div className={`flex justify-between text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <span>Subtotal</span>
+                  <span>₹{fmt(subtotal)}</span>
+                </div>
+                {couponDiscount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+                    <span>Discount ({appliedCoupon?.code})</span>
+                    <span>-₹{fmt(couponDiscount)}</span>
+                  </div>
+                )}
+                {hasHardcopy && (
+                  <div className="flex justify-between text-sm">
+                    <span>Delivery</span>
+                    <span className="text-green-600 dark:text-green-400">FREE</span>
+                  </div>
+                )}
+                <div className={`flex justify-between font-bold text-base pt-2 ${dm ? 'text-white' : 'text-gray-900'}`}>
+                  <span>Total</span>
+                  <span className={selectedPaymentMethod === 'qr' ? 'text-violet-600 dark:text-violet-400' : 'text-emerald-600 dark:text-emerald-400'}>
+                    ₹{fmt(total)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Address (if hardcopy) - Improved Dark Mode */}
+          {hasHardcopy && address && (
+            <div className={`rounded-xl border-2 ${dm ? 'border-gray-700' : 'border-gray-200'} p-3 sm:p-4`}>
+              <h3 className={`font-black mb-2 ${dm ? 'text-white' : 'text-gray-900'}`}>Delivery Address</h3>
+              <div className={`space-y-1 text-sm ${dm ? 'text-gray-300' : 'text-gray-600'}`}>
+                <p><span className="font-medium">Name:</span> {address.name}</p>
+                <p><span className="font-medium">Address:</span> {address.address}</p>
+                <p><span className="font-medium">City:</span> {address.city} - {address.pincode}</p>
+                <p><span className="font-medium">Phone:</span> {address.phone}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Place Order Button */}
+          <button
+            onClick={placeOrder}
+            disabled={isCreatingOrder}
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-base disabled:opacity-50 flex items-center justify-center gap-2 hover:shadow-lg transition-all"
+          >
+            {isCreatingOrder ? <Loader className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
+            {isCreatingOrder ? 'Placing Order...' : `Place Order • ₹${fmt(total)}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+  // QR Upload Modal (after order is placed)
+  if (orderPlaced && selectedPaymentMethod === 'qr') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
+        <div className={`max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl ${dm ? 'bg-gray-900' : 'bg-white'}`}>
+          <div className={`sticky top-0 z-10 p-4 sm:p-6 border-b-2 ${dm ? 'border-gray-800 bg-gray-900' : 'border-gray-100 bg-white'}`}>
+            <div className="flex items-center justify-between">
+              <h2 className={`text-xl sm:text-2xl font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Complete Payment</h2>
+              <button onClick={() => { setOrderPlaced(null); setSelectedPaymentMethod(null); }} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className={`text-xs sm:text-sm mt-1 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Order #{orderPlaced.id.slice(0, 8)} · Total: ₹{fmt(orderPlaced.total)}</p>
+          </div>
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+            <div className={`p-4 sm:p-6 rounded-2xl border-2 text-center ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+              <h3 className={`font-black text-base sm:text-lg mb-3 ${dm ? 'text-white' : 'text-gray-900'}`}>Scan & Pay</h3>
+              <div className="flex justify-center mb-4">
+                <div className="w-40 h-40 sm:w-48 sm:h-48 bg-white rounded-2xl shadow-lg flex items-center justify-center p-3 sm:p-4">
+                  <img 
+                    src="/paytm-qr-placeholder.jpeg" 
+                    alt="Paytm QR Code"
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      const parent = (e.target as HTMLImageElement).parentElement;
+                      if (parent) {
+                        parent.innerHTML = '<div class="text-center"><QrCode className="w-16 h-16 sm:w-20 sm:h-20 text-gray-400 mx-auto mb-2"/><p class="text-xs sm:text-sm text-gray-500">Paytm QR Code</p><p class="text-[10px] sm:text-xs text-gray-400">UPI: 9810493309@ptsbi</p></div>';
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+              <p className={`text-xs sm:text-sm mb-4 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>
+                Scan this QR code using any UPI app and pay <span className="font-black text-violet-500">₹{fmt(orderPlaced.total)}</span>
+              </p>
+              <div className="space-y-3">
+                <div className={`p-2 sm:p-3 rounded-xl ${dm ? 'bg-gray-700' : 'bg-white'}`}>
+                  <p className={`text-[10px] sm:text-xs font-mono break-all ${dm ? 'text-gray-400' : 'text-gray-500'}`}>UPI ID: <span className="font-bold text-violet-500">9810493309@ptsbi</span></p>
+                </div>
+                <div className="border-t-2 pt-3 sm:pt-4">
+                  <label className={`block text-xs sm:text-sm font-bold mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Upload Payment Screenshot</label>
+                  <div className={`relative border-2 border-dashed rounded-xl p-3 sm:p-4 text-center cursor-pointer transition-all ${
+                    paymentProof 
+                      ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/20' 
+                      : dm ? 'border-gray-600 hover:border-violet-500' : 'border-gray-300 hover:border-violet-400'
+                  }`}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-2 ${paymentProof ? 'text-violet-500' : dm ? 'text-gray-500' : 'text-gray-400'}`} />
+                    <p className={`text-xs sm:text-sm ${paymentProof ? 'text-violet-500 font-medium' : dm ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {paymentProof ? paymentProof.name.substring(0, 30) + (paymentProof.name.length > 30 ? '...' : '') : 'Click or drag to upload'}
+                    </p>
+                    <p className={`text-[10px] sm:text-xs mt-1 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>PNG, JPG up to 5MB</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleUploadProof}
+                  disabled={!paymentProof || uploadingProof}
+                  className="w-full py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-sm sm:text-base disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {uploadingProof ? <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <Send className="w-4 h-4 sm:w-5 sm:h-5" />}
+                  {uploadingProof ? 'Uploading...' : 'Submit Payment Proof'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Order Tracking Modal
   if (showTrackModal && orderStatus) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
@@ -932,6 +977,7 @@ export default function PaymentCheckout() {
         {tab === 'cart' && (
           <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
             <div className="flex-1 space-y-4 sm:space-y-5">
+              {/* Cart items display - same as before */}
               <div className={`rounded-2xl border-2 overflow-hidden ${dm ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
                 <div className={`p-3 sm:p-5 border-b-2 ${dm ? 'border-gray-800' : 'border-gray-100'}`}>
                   <h3 className={`font-black text-sm sm:text-base ${dm ? 'text-white' : 'text-gray-900'}`}>Your Cart ({cartItems.length} items)</h3>
@@ -1015,9 +1061,6 @@ export default function PaymentCheckout() {
                 </button>
                 {!meetsMinOrder && cartItems.length > 0 && (
                   <p className="text-[10px] sm:text-xs text-center mt-2 sm:mt-3 text-amber-500">Minimum order: ₹{MIN_ORDER_AMOUNT}</p>
-                )}
-                {hasOnlyFees && cartItems.length > 0 && (
-                  <p className="text-[10px] sm:text-xs text-center mt-2 sm:mt-3 text-blue-500">💳 Only QR payment available</p>
                 )}
               </div>
             </div>
