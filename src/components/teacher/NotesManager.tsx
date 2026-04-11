@@ -6,7 +6,7 @@ import { useUploadThing } from '@/lib/uploadthing';
 import {
   FileText, Plus, Search, Download, Eye, Bookmark,
   Trash2, Edit, Pin, Upload, Loader, X,
-  RefreshCw, Image as ImageIcon, Star, Lock, Unlock
+  RefreshCw, Image as ImageIcon, Star, Lock, Unlock, IndianRupee
 } from 'lucide-react';
 
 interface Note {
@@ -24,6 +24,7 @@ interface Note {
   thumbnailUrl: string | null;
   isPublished: boolean;
   isPinned: boolean;
+  price: number;
   downloads: number;
   views: number;
   createdAt: string;
@@ -32,7 +33,7 @@ interface Note {
   };
 }
 
-// ── Dark mode hook (same MutationObserver pattern) ────────────────────────────
+// ── Dark mode hook ────────────────────────────────────────────────────────────
 function useDarkMode() {
   const [dm, setDm] = useState(false);
   useEffect(() => {
@@ -261,7 +262,7 @@ export default function NotesManager() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Note Card
+// Note Card Component
 // ═════════════════════════════════════════════════════════════════════════════
 function NoteCard({
   note, darkMode,
@@ -311,12 +312,13 @@ function NoteCard({
           </p>
         )}
 
-        {/* Stats row */}
-        <div className={`grid grid-cols-3 gap-2 mb-4 pb-4 border-b ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+        {/* Stats row - Updated with 4 columns including Price */}
+        <div className={`grid grid-cols-4 gap-2 mb-4 pb-4 border-b ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
           {[
             { label: 'Downloads', value: note.downloads },
             { label: 'Views',     value: note.views     },
             { label: 'Bookmarks', value: note.stats.totalBookmarks },
+            { label: 'Price',     value: `₹${note.price}` },
           ].map(({ label, value }) => (
             <div key={label} className="text-center">
               <p className={`text-xs mb-0.5 ${dm ? 'text-gray-500' : 'text-gray-500'}`}>{label}</p>
@@ -377,7 +379,7 @@ function NoteCard({
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Note Form Modal — handles both Create & Edit
+// Note Form Modal — handles both Create & Edit (with Price field)
 // ═════════════════════════════════════════════════════════════════════════════
 function NoteFormModal({
   mode, note, darkMode, onClose, onSuccess,
@@ -399,6 +401,7 @@ function NoteFormModal({
     class:       note?.class       || '',
     topic:       note?.topic       || '',
     chapter:     note?.chapter     || '',
+    price:       note?.price       || 30,
     isPublished: note?.isPublished ?? true,
     isPinned:    note?.isPinned    ?? false,
   });
@@ -452,7 +455,12 @@ function NoteFormModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.subject || !formData.class || !uploadedFile) {
-      alert('Please fill in all required fields and upload a file'); return;
+      alert('Please fill in all required fields and upload a file');
+      return;
+    }
+    if (formData.price < 0) {
+      alert('Price cannot be negative');
+      return;
     }
     setSaving(true);
     try {
@@ -468,6 +476,7 @@ function NoteFormModal({
         fileType:     uploadedFile.type,
         fileSize:     uploadedFile.size,
         thumbnailUrl: uploadedThumbnail?.url || null,
+        price:        formData.price,
         isPublished:  formData.isPublished,
         isPinned:     formData.isPinned,
         ...(isEdit ? { noteId: note!.id } : {}),
@@ -548,6 +557,27 @@ function NoteFormModal({
             <div className="grid grid-cols-1 xs:grid-cols-2 gap-3 sm:gap-4">
               <Field label="Topic"   name="topic"   placeholder="e.g., Alcohols and Phenols" />
               <Field label="Chapter" name="chapter" placeholder="e.g., Chapter 11" />
+            </div>
+
+            {/* Price Field - NEW */}
+            <div>
+              <label className={s.label}>Hardcopy Price (₹) *</label>
+              <div className="relative">
+                <IndianRupee className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 ${dm ? 'text-gray-500' : 'text-gray-400'}`} />
+                <input 
+                  type="number" 
+                  value={formData.price}
+                  onChange={e => setFormData(p => ({ ...p, price: parseInt(e.target.value) || 0 }))}
+                  placeholder="e.g., 30"
+                  min="0"
+                  step="5"
+                  required
+                  className={`${s.input} pl-9 sm:pl-10`}
+                />
+              </div>
+              <p className={`text-xs mt-1 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>
+                This price will be used when students order a hardcopy of this note. Default is ₹30.
+              </p>
             </div>
 
             {/* File upload */}

@@ -18,6 +18,7 @@ interface TeacherNote {
   thumbnailUrl: string | null;
   isPublished: boolean;
   isPinned: boolean;
+  price: number;  // Added price field
   downloads: number;
   views: number;
   createdAt: string;
@@ -73,6 +74,7 @@ export async function GET(req: NextRequest) {
       thumbnailUrl: note.thumbnailUrl,
       isPublished: note.isPublished,
       isPinned: note.isPinned,
+      price: note.price || 30,  // Added price field
       downloads: note.downloads,
       views: note.views,
       createdAt: note.createdAt,
@@ -122,7 +124,8 @@ export async function POST(req: NextRequest) {
       fileSize,
       thumbnailUrl,
       isPublished,
-      isPinned 
+      isPinned,
+      price  // Added price field
     } = body;
 
     if (!title || !subject || !className || !fileUrl || !fileName) {
@@ -147,6 +150,7 @@ export async function POST(req: NextRequest) {
         thumbnailUrl: thumbnailUrl || null,
         isPublished: isPublished !== undefined ? isPublished : true,
         isPinned: isPinned || false,
+        price: price || 30,  // Added price field with default 30
         teacherId: teacher.id,
       },
     });
@@ -161,7 +165,76 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH - Update note
+// PUT - Update note (full update)
+// PUT - Update note (full update)
+export async function PUT(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const teacher = await prisma.teacher.findUnique({
+      where: { userId: session.user.id },
+    });
+
+    if (!teacher) {
+      return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 });
+    }
+
+    const body = await req.json();
+    const { noteId, ...updateData } = body;
+
+    if (!noteId) {
+      return NextResponse.json({ error: 'Note ID required' }, { status: 400 });
+    }
+
+    // Verify ownership
+    const note = await prisma.note.findFirst({
+      where: {
+        id: noteId,
+        teacherId: teacher.id,
+      },
+    });
+
+    if (!note) {
+      return NextResponse.json({ error: 'Note not found or unauthorized' }, { status: 404 });
+    }
+
+    // Prepare update data
+    const dataToUpdate: any = {};
+    if (updateData.title !== undefined) dataToUpdate.title = updateData.title;
+    if (updateData.description !== undefined) dataToUpdate.description = updateData.description;
+    if (updateData.subject !== undefined) dataToUpdate.subject = updateData.subject;
+    if (updateData.class !== undefined) dataToUpdate.class = updateData.class;
+    if (updateData.topic !== undefined) dataToUpdate.topic = updateData.topic;
+    if (updateData.chapter !== undefined) dataToUpdate.chapter = updateData.chapter;
+    if (updateData.fileUrl !== undefined) dataToUpdate.fileUrl = updateData.fileUrl;
+    if (updateData.fileName !== undefined) dataToUpdate.fileName = updateData.fileName;
+    if (updateData.fileType !== undefined) dataToUpdate.fileType = updateData.fileType;
+    if (updateData.fileSize !== undefined) dataToUpdate.fileSize = updateData.fileSize;
+    if (updateData.thumbnailUrl !== undefined) dataToUpdate.thumbnailUrl = updateData.thumbnailUrl;
+    if (updateData.isPublished !== undefined) dataToUpdate.isPublished = updateData.isPublished;
+    if (updateData.isPinned !== undefined) dataToUpdate.isPinned = updateData.isPinned;
+    if (updateData.price !== undefined) dataToUpdate.price = updateData.price;  // Add this line
+
+    const updatedNote = await prisma.note.update({
+      where: { id: noteId },
+      data: dataToUpdate,
+    });
+
+    return NextResponse.json({ success: true, note: updatedNote });
+  } catch (error: any) {
+    console.error('Error updating note:', error);
+    return NextResponse.json(
+      { error: 'Failed to update note', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH - Toggle actions
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);

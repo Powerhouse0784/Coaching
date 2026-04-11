@@ -42,6 +42,7 @@ interface Note {
   isPinned: boolean;
   downloads: number;
   views: number;
+  price: number;  // Added price field for hardcopy
   teacher: { name: string | null; avatar: string | null };
 }
 
@@ -53,6 +54,7 @@ interface CartItem {
   qty?: number;
   subject?: string;
   class?: string;
+  unitPrice?: number; // For hardcopy, store the per-copy price
 }
 
 interface AddressForm {
@@ -79,8 +81,6 @@ interface Order {
   createdAt: Date;
   paymentProof?: string;
 }
-
-const HARDCOPY_PRICE = 30;
 
 // ─── Subject colour map ───────────────────────────────────────────────────────
 const SUB_COLOR: Record<string, { light: string; dark: string; dot: string; grad: string }> = {
@@ -148,9 +148,9 @@ export default function PaymentCheckout() {
 
   // Payment
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'qr' | 'cod' | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'qr' | 'cod' | null>(null);
   const [orderPlaced, setOrderPlaced] = useState<Order | null>(null);
-  const [orderLoading, setOrderLoading] = useState(false);
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [orderStatus, setOrderStatus] = useState<Order | null>(null);
@@ -175,11 +175,15 @@ export default function PaymentCheckout() {
       .finally(() => setPlansLoading(false));
   }, []);
 
-  // ── Fetch notes for hardcopy ──
+  // ── Fetch notes for hardcopy (with price) ──
   useEffect(() => {
     fetch('/api/payments?action=notes')
       .then(r => r.json())
-      .then(d => { if (d.success) setNotes(d.notes); })
+      .then(d => { 
+        if (d.success) {
+          setNotes(d.notes);
+        }
+      })
       .catch(console.error)
       .finally(() => setNotesLoading(false));
   }, []);
@@ -197,7 +201,7 @@ export default function PaymentCheckout() {
     return ms && mc && mq;
   });
 
-  // ── Cart items ──
+  // ── Cart items - NOW USING NOTE'S INDIVIDUAL PRICE ──
   const cartItems: CartItem[] = [
     ...feePlans.filter(p => selectedPlans[p.id]).map(p => ({
       id: p.id, type: 'fee' as const,
@@ -206,10 +210,13 @@ export default function PaymentCheckout() {
     })),
     ...Object.entries(hardcopyQty).filter(([, q]) => q > 0).map(([noteId, qty]) => {
       const note = notes.find(n => n.id === noteId);
+      const unitPrice = note?.price || 30; // Use note's price, fallback to 30
       return {
         id: noteId, type: 'hardcopy' as const,
         name: note?.title || 'Note',
-        price: HARDCOPY_PRICE * qty, qty,
+        price: unitPrice * qty,
+        qty,
+        unitPrice,
         subject: note?.subject,
       };
     }),
@@ -258,8 +265,8 @@ export default function PaymentCheckout() {
     }
   };
 
-  // ── Place Order ──
-  const handlePlaceOrder = async () => {
+  // ── Open Payment Modal (No order created yet) ──
+  const handleOpenPaymentModal = () => {
     if (cartItems.length === 0) return;
     if (!meetsMinOrder) {
       alert(`Minimum order amount is ₹${MIN_ORDER_AMOUNT}. Please add more items.`);
@@ -272,32 +279,53 @@ export default function PaymentCheckout() {
         return;
       }
     }
+    setShowPaymentModal(true);
+  };
 
-    setOrderLoading(true);
+  // ── Create Order After Payment Method Selection ──
+  const createOrderWithPaymentMethod = async (method: 'qr' | 'cod') => {
+    setSelectedPaymentMethod(method);
+    setIsCreatingOrder(true);
+    
     try {
       const res = await fetch('/api/payments', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'create-order',
-            items: cartItems,
-            subtotal,
-            couponDiscount,
-            total,
-            couponCode: appliedCoupon?.code || null,
-            address: hasHardcopy ? address : null,
-            userEmail: session?.user?.email,
-          }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create-order',
+          items: cartItems,
+          subtotal,
+          couponDiscount,
+          total,
+          couponCode: appliedCoupon?.code || null,
+          address: hasHardcopy ? address : null,
+          userEmail: session?.user?.email,
+          paymentMethod: method,
+        }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       
       setOrderPlaced(data.order);
-      setShowPaymentModal(true);
+      
+      if (method === 'cod') {
+        alert('Order placed successfully! You will receive confirmation via email after admin approval.');
+        setShowPaymentModal(false);
+        setOrderPlaced(null);
+        setSelectedPaymentMethod(null);
+        // Reset cart
+        setSelectedPlans({});
+        setHardcopyQty({});
+        setAppliedCoupon(null);
+        setCouponCode('');
+        setTab('fees');
+      }
     } catch (error: any) {
       alert(error?.message || 'Failed to place order');
+      setShowPaymentModal(false);
+      setSelectedPaymentMethod(null);
     } finally {
-      setOrderLoading(false);
+      setIsCreatingOrder(false);
     }
   };
 
@@ -319,6 +347,7 @@ export default function PaymentCheckout() {
         alert('Payment proof uploaded successfully! We will verify and confirm your order.');
         setShowPaymentModal(false);
         setOrderPlaced(null);
+        setSelectedPaymentMethod(null);
         // Reset cart
         setSelectedPlans({});
         setHardcopyQty({});
@@ -336,96 +365,58 @@ export default function PaymentCheckout() {
   };
 
   // ════════════════════════════════════════════════════════════════════════════
-  // PAYMENT MODAL
+  // PAYMENT MODAL - Order created AFTER selection
   // ════════════════════════════════════════════════════════════════════════════
-  if (showPaymentModal && orderPlaced) {
-    // Determine available payment methods
-    const showQR = true; // QR always available
-    const showCOD = !hasOnlyFees; // COD only if not only fees
+  if (showPaymentModal) {
+    const showCOD = !hasOnlyFees;
 
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-        <div className={`max-w-2xl w-full rounded-3xl overflow-hidden shadow-2xl ${dm ? 'bg-gray-900' : 'bg-white'}`}>
-          <div className={`p-6 border-b-2 ${dm ? 'border-gray-800' : 'border-gray-100'}`}>
-            <div className="flex items-center justify-between">
-              <h2 className={`text-2xl font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Complete Payment</h2>
-              <button onClick={() => setShowPaymentModal(false)} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className={`text-sm mt-1 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Order #{orderPlaced.id.slice(0, 8)} · Total: ₹{fmt(orderPlaced.total)}</p>
-          </div>
-
-          <div className="p-6 space-y-6">
-            {/* Payment Options */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* QR Payment - Always Available */}
-              <button
-                onClick={() => setPaymentMethod('qr')}
-                className={`p-5 rounded-2xl border-2 text-center transition-all ${
-                  paymentMethod === 'qr'
-                    ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/30'
-                    : dm ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
-                  <QrCode className="w-8 h-8 text-white" />
-                </div>
-                <h3 className={`font-black mb-1 ${dm ? 'text-white' : 'text-gray-900'}`}>Pay via QR</h3>
-                <p className={`text-xs ${dm ? 'text-gray-500' : 'text-gray-400'}`}>Scan & pay with any UPI app</p>
-              </button>
-
-              {/* COD - Only if not only fees */}
-              {showCOD && (
-                <button
-                  onClick={() => setPaymentMethod('cod')}
-                  className={`p-5 rounded-2xl border-2 text-center transition-all ${
-                    paymentMethod === 'cod'
-                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
-                      : dm ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                    <DollarSign className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className={`font-black mb-1 ${dm ? 'text-white' : 'text-gray-900'}`}>Cash on Delivery</h3>
-                  <p className={`text-xs ${dm ? 'text-gray-500' : 'text-gray-400'}`}>Pay when you receive</p>
+    // If order is created and payment method is QR, show QR upload section
+    if (orderPlaced && selectedPaymentMethod === 'qr') {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
+          <div className={`max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl ${dm ? 'bg-gray-900' : 'bg-white'}`}>
+            <div className={`sticky top-0 z-10 p-4 sm:p-6 border-b-2 ${dm ? 'border-gray-800 bg-gray-900' : 'border-gray-100 bg-white'}`}>
+              <div className="flex items-center justify-between">
+                <h2 className={`text-xl sm:text-2xl font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Complete Payment</h2>
+                <button onClick={() => { setShowPaymentModal(false); setOrderPlaced(null); setSelectedPaymentMethod(null); }} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800">
+                  <X className="w-5 h-5" />
                 </button>
-              )}
+              </div>
+              <p className={`text-xs sm:text-sm mt-1 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Order #{orderPlaced.id.slice(0, 8)} · Total: ₹{fmt(orderPlaced.total)}</p>
             </div>
 
-            {/* QR Section */}
-            {paymentMethod === 'qr' && (
-              <div className={`p-6 rounded-2xl border-2 text-center ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-                <h3 className={`font-black mb-3 ${dm ? 'text-white' : 'text-gray-900'}`}>Scan & Pay</h3>
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              {/* QR Section */}
+              <div className={`p-4 sm:p-6 rounded-2xl border-2 text-center ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                <h3 className={`font-black text-base sm:text-lg mb-3 ${dm ? 'text-white' : 'text-gray-900'}`}>Scan & Pay</h3>
                 <div className="flex justify-center mb-4">
-                  <div className="w-48 h-48 bg-white rounded-2xl shadow-lg flex items-center justify-center p-4">
+                  <div className="w-40 h-40 sm:w-48 sm:h-48 bg-white rounded-2xl shadow-lg flex items-center justify-center p-3 sm:p-4">
                     <img 
-                      src="/paytm-qr-placeholder.jpeg" 
+                      src="/paytm-qr-placeholder.png" 
                       alt="Paytm QR Code"
                       className="w-full h-full object-contain"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none';
                         const parent = (e.target as HTMLImageElement).parentElement;
                         if (parent) {
-                          parent.innerHTML = '<div class="text-center"><QrCode className="w-20 h-20 text-gray-400 mx-auto mb-2"/><p class="text-sm text-gray-500">Paytm QR Code</p><p class="text-xs text-gray-400">UPI: 9810493309@ptsbi</p></div>';
+                          parent.innerHTML = '<div class="text-center"><QrCode className="w-16 h-16 sm:w-20 sm:h-20 text-gray-400 mx-auto mb-2"/><p class="text-xs sm:text-sm text-gray-500">Paytm QR Code</p><p class="text-[10px] sm:text-xs text-gray-400">UPI: 9810493309@ptsbi</p></div>';
                         }
                       }}
                     />
                   </div>
                 </div>
-                <p className={`text-sm mb-4 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Scan this QR code using any UPI app (Paytm, Google Pay, PhonePe) and pay <span className="font-black text-violet-500">₹{fmt(orderPlaced.total)}</span>
+                <p className={`text-xs sm:text-sm mb-4 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Scan this QR code using any UPI app and pay <span className="font-black text-violet-500">₹{fmt(orderPlaced.total)}</span>
                 </p>
                 
                 <div className="space-y-3">
-                  <div className={`p-3 rounded-xl ${dm ? 'bg-gray-700' : 'bg-white'}`}>
-                    <p className={`text-xs font-mono ${dm ? 'text-gray-400' : 'text-gray-500'}`}>UPI ID: <span className="font-bold text-violet-500">9810493309@ptsbi</span></p>
+                  <div className={`p-2 sm:p-3 rounded-xl ${dm ? 'bg-gray-700' : 'bg-white'}`}>
+                    <p className={`text-[10px] sm:text-xs font-mono break-all ${dm ? 'text-gray-400' : 'text-gray-500'}`}>UPI ID: <span className="font-bold text-violet-500">9810493309@ptsbi</span></p>
                   </div>
                   
-                  <div className="border-t-2 pt-4">
-                    <label className={`block text-sm font-bold mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Upload Payment Screenshot</label>
-                    <div className={`relative border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all ${
+                  <div className="border-t-2 pt-3 sm:pt-4">
+                    <label className={`block text-xs sm:text-sm font-bold mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Upload Payment Screenshot</label>
+                    <div className={`relative border-2 border-dashed rounded-xl p-3 sm:p-4 text-center cursor-pointer transition-all ${
                       paymentProof 
                         ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/20' 
                         : dm ? 'border-gray-600 hover:border-violet-500' : 'border-gray-300 hover:border-violet-400'
@@ -436,11 +427,11 @@ export default function PaymentCheckout() {
                         onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       />
-                      <Upload className={`w-8 h-8 mx-auto mb-2 ${paymentProof ? 'text-violet-500' : dm ? 'text-gray-500' : 'text-gray-400'}`} />
-                      <p className={`text-sm ${paymentProof ? 'text-violet-500 font-medium' : dm ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {paymentProof ? paymentProof.name : 'Click or drag to upload screenshot'}
+                      <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-2 ${paymentProof ? 'text-violet-500' : dm ? 'text-gray-500' : 'text-gray-400'}`} />
+                      <p className={`text-xs sm:text-sm ${paymentProof ? 'text-violet-500 font-medium' : dm ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {paymentProof ? paymentProof.name.substring(0, 30) + (paymentProof.name.length > 30 ? '...' : '') : 'Click or drag to upload'}
                       </p>
-                      <p className={`text-xs mt-1 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>
+                      <p className={`text-[10px] sm:text-xs mt-1 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>
                         PNG, JPG up to 5MB
                       </p>
                     </div>
@@ -449,66 +440,81 @@ export default function PaymentCheckout() {
                   <button
                     onClick={handleUploadProof}
                     disabled={!paymentProof || uploadingProof}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-sm sm:text-base disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {uploadingProof ? <Loader className="w-5 h-5 animate-spin" /> : <Send className="w-4 h-4" />}
+                    {uploadingProof ? <Loader className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <Send className="w-4 h-4 sm:w-5 sm:h-5" />}
                     {uploadingProof ? 'Uploading...' : 'Submit Payment Proof'}
                   </button>
                 </div>
               </div>
-            )}
+            </div>
+          </div>
+        </div>
+      );
+    }
 
-            {/* COD Section */}
-            {paymentMethod === 'cod' && (
-              <div className={`p-6 rounded-2xl border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <Truck className="w-8 h-8 text-emerald-500" />
-                  <div>
-                    <h3 className={`font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Cash on Delivery</h3>
-                    <p className={`text-sm ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Pay when you receive the order</p>
-                  </div>
+    // Show payment method selection (order not created yet)
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
+        <div className={`max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl ${dm ? 'bg-gray-900' : 'bg-white'}`}>
+          <div className={`sticky top-0 z-10 p-4 sm:p-6 border-b-2 ${dm ? 'border-gray-800 bg-gray-900' : 'border-gray-100 bg-white'}`}>
+            <div className="flex items-center justify-between">
+              <h2 className={`text-xl sm:text-2xl font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Select Payment Method</h2>
+              <button onClick={() => setShowPaymentModal(false)} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className={`text-xs sm:text-sm mt-1 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Total Amount: ₹{fmt(total)}</p>
+          </div>
+
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              {/* QR Payment */}
+              <button
+                onClick={() => createOrderWithPaymentMethod('qr')}
+                disabled={isCreatingOrder}
+                className={`p-4 sm:p-5 rounded-2xl border-2 text-center transition-all ${
+                  isCreatingOrder ? 'opacity-50 cursor-not-allowed' : dm ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-2 sm:mb-3 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
+                  {isCreatingOrder && selectedPaymentMethod === 'qr' ? (
+                    <Loader className="w-6 h-6 sm:w-8 sm:h-8 text-white animate-spin" />
+                  ) : (
+                    <QrCode className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+                  )}
                 </div>
-                <div className={`p-4 rounded-xl mb-4 ${dm ? 'bg-gray-700' : 'bg-white'}`}>
-                  <p className="text-sm">📦 Order will be confirmed after admin approval</p>
-                  <p className="text-sm mt-1">💰 Pay ₹{fmt(orderPlaced.total)} in cash at delivery</p>
-                  <p className="text-sm mt-1">⏱️ Delivery: 3-5 business days after approval</p>
-                </div>
+                <h3 className={`font-black text-sm sm:text-base mb-1 ${dm ? 'text-white' : 'text-gray-900'}`}>Pay via QR</h3>
+                <p className={`text-[10px] sm:text-xs ${dm ? 'text-gray-500' : 'text-gray-400'}`}>Scan & pay with any UPI app</p>
+              </button>
+
+              {/* COD - Only if not only fees */}
+              {showCOD && (
                 <button
-                  onClick={async () => {
-                    setUploadingProof(true);
-                    try {
-                      const res = await fetch('/api/payments', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          action: 'confirm-cod',
-                          orderId: orderPlaced.id,
-                        }),
-                      });
-                      const data = await res.json();
-                      if (data.success) {
-                        alert('Order placed successfully! You will receive confirmation via email after admin approval.');
-                        setShowPaymentModal(false);
-                        setOrderPlaced(null);
-                        setSelectedPlans({});
-                        setHardcopyQty({});
-                        setAppliedCoupon(null);
-                        setCouponCode('');
-                        setTab('fees');
-                      } else {
-                        alert(data.error);
-                      }
-                    } catch (error) {
-                      alert('Failed to confirm order');
-                    } finally {
-                      setUploadingProof(false);
-                    }
-                  }}
-                  disabled={uploadingProof}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black"
+                  onClick={() => createOrderWithPaymentMethod('cod')}
+                  disabled={isCreatingOrder}
+                  className={`p-4 sm:p-5 rounded-2xl border-2 text-center transition-all ${
+                    isCreatingOrder ? 'opacity-50 cursor-not-allowed' : dm ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'
+                  }`}
                 >
-                  {uploadingProof ? <Loader className="w-5 h-5 animate-spin mx-auto" /> : 'Confirm COD Order'}
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-2 sm:mb-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                    {isCreatingOrder && selectedPaymentMethod === 'cod' ? (
+                      <Loader className="w-6 h-6 sm:w-8 sm:h-8 text-white animate-spin" />
+                    ) : (
+                      <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+                    )}
+                  </div>
+                  <h3 className={`font-black text-sm sm:text-base mb-1 ${dm ? 'text-white' : 'text-gray-900'}`}>Cash on Delivery</h3>
+                  <p className={`text-[10px] sm:text-xs ${dm ? 'text-gray-500' : 'text-gray-400'}`}>Pay when you receive</p>
                 </button>
+              )}
+            </div>
+
+            {hasOnlyFees && (
+              <div className={`p-3 sm:p-4 rounded-xl text-center ${dm ? 'bg-blue-950/30 border border-blue-800' : 'bg-blue-50 border border-blue-200'}`}>
+                <p className="text-xs sm:text-sm text-blue-600 dark:text-blue-400">
+                  💳 Only QR payment is available for fee plans.
+                </p>
               </div>
             )}
           </div>
@@ -518,54 +524,53 @@ export default function PaymentCheckout() {
   }
 
   // ════════════════════════════════════════════════════════════════════════════
-  // ORDER TRACKING MODAL
+  // ORDER TRACKING MODAL - RESPONSIVE
   // ════════════════════════════════════════════════════════════════════════════
   if (showTrackModal && orderStatus) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-        <div className={`max-w-lg w-full rounded-3xl overflow-hidden shadow-2xl ${dm ? 'bg-gray-900' : 'bg-white'}`}>
-          <div className={`p-6 border-b-2 ${dm ? 'border-gray-800' : 'border-gray-100'}`}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
+        <div className={`max-w-lg w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl ${dm ? 'bg-gray-900' : 'bg-white'}`}>
+          <div className={`sticky top-0 z-10 p-4 sm:p-6 border-b-2 ${dm ? 'border-gray-800 bg-gray-900' : 'border-gray-100 bg-white'}`}>
             <div className="flex items-center justify-between">
-              <h2 className={`text-2xl font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Order Status</h2>
+              <h2 className={`text-xl sm:text-2xl font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Order Status</h2>
               <button onClick={() => { setShowTrackModal(false); setOrderStatus(null); }} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800">
                 <X className="w-5 h-5" />
               </button>
             </div>
           </div>
-          <div className="p-6 space-y-4">
-            <div className={`p-4 rounded-xl text-center ${
+          <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+            <div className={`p-3 sm:p-4 rounded-xl text-center ${
               orderStatus.status === 'approved' ? 'bg-emerald-100 dark:bg-emerald-950/30' :
               orderStatus.status === 'rejected' ? 'bg-red-100 dark:bg-red-950/30' :
               'bg-amber-100 dark:bg-amber-950/30'
             }`}>
               {orderStatus.status === 'approved' && (
                 <>
-                  <ThumbsUp className="w-12 h-12 text-emerald-500 mx-auto mb-2" />
-                  <h3 className="font-black text-emerald-500">Order Approved! ✅</h3>
-                  <p className="text-sm mt-1">Your order is confirmed and will be delivered soon.</p>
+                  <ThumbsUp className="w-10 h-10 sm:w-12 sm:h-12 text-emerald-500 mx-auto mb-2" />
+                  <h3 className="font-black text-emerald-500 text-sm sm:text-base">Order Approved! ✅</h3>
+                  <p className="text-xs sm:text-sm mt-1">Your order is confirmed and will be delivered soon.</p>
                 </>
               )}
               {orderStatus.status === 'rejected' && (
                 <>
-                  <ThumbsDown className="w-12 h-12 text-red-500 mx-auto mb-2" />
-                  <h3 className="font-black text-red-500">Order Rejected ❌</h3>
-                  <p className="text-sm mt-1">Please contact support for more information.</p>
-                  
+                  <ThumbsDown className="w-10 h-10 sm:w-12 sm:h-12 text-red-500 mx-auto mb-2" />
+                  <h3 className="font-black text-red-500 text-sm sm:text-base">Order Rejected ❌</h3>
+                  <p className="text-xs sm:text-sm mt-1">Please contact support for more information.</p>
                 </>
               )}
               {orderStatus.status === 'pending' && (
                 <>
-                  <Loader className="w-12 h-12 text-amber-500 mx-auto mb-2 animate-spin" />
-                  <h3 className="font-black text-amber-500">Pending Approval ⏳</h3>
-                  <p className="text-sm mt-1">Your order is waiting for admin approval.</p>
+                  <Loader className="w-10 h-10 sm:w-12 sm:h-12 text-amber-500 mx-auto mb-2 animate-spin" />
+                  <h3 className="font-black text-amber-500 text-sm sm:text-base">Pending Approval ⏳</h3>
+                  <p className="text-xs sm:text-sm mt-1">Your order is waiting for admin approval.</p>
                 </>
               )}
             </div>
-            <div className={`p-4 rounded-xl ${dm ? 'bg-gray-800' : 'bg-gray-50'}`}>
-              <p><strong>Order ID:</strong> {orderStatus.id.slice(0, 12)}</p>
-              <p><strong>Total:</strong> ₹{fmt(orderStatus.total)}</p>
-              <p><strong>Payment Method:</strong> {orderStatus.paymentMethod?.toUpperCase() || 'Pending'}</p>
-              <p><strong>Placed on:</strong> {new Date(orderStatus.createdAt).toLocaleString()}</p>
+            <div className={`p-3 sm:p-4 rounded-xl ${dm ? 'bg-gray-800' : 'bg-gray-50'}`}>
+              <p className="text-xs sm:text-sm break-all"><strong>Order ID:</strong> {orderStatus.id}</p>
+              <p className="text-xs sm:text-sm mt-1"><strong>Total:</strong> ₹{fmt(orderStatus.total)}</p>
+              <p className="text-xs sm:text-sm mt-1"><strong>Payment Method:</strong> {orderStatus.paymentMethod?.toUpperCase() || 'Pending'}</p>
+              <p className="text-xs sm:text-sm mt-1"><strong>Placed on:</strong> {new Date(orderStatus.createdAt).toLocaleString()}</p>
             </div>
           </div>
         </div>
@@ -574,27 +579,26 @@ export default function PaymentCheckout() {
   }
 
   // ════════════════════════════════════════════════════════════════════════════
-  // MAIN UI
+  // MAIN UI - FULLY RESPONSIVE
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div className={`min-h-screen transition-colors duration-200 ${dm ? 'bg-gray-950' : 'bg-gradient-to-br from-slate-50 via-white to-violet-50/20'}`}>
 
-      {/* ── Top Header ── */}
+      {/* ── Top Header - Responsive ── */}
       <div className={`sticky top-0 z-30 border-b-2 backdrop-blur-md ${dm ? 'bg-gray-900/95 border-gray-800' : 'bg-white/95 border-gray-100'} shadow-sm`}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between py-3 sm:py-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-md shadow-violet-500/30 flex-shrink-0">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6">
+          <div className="flex items-center justify-between py-2 sm:py-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-md shadow-violet-500/30 flex-shrink-0">
                 <IndianRupee className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
-                <h1 className={`text-lg sm:text-xl font-black leading-none ${dm ? 'text-white' : 'text-gray-900'}`}>Fees & Payments</h1>
-                <p className={`text-[11px] sm:text-xs hidden sm:block ${dm ? 'text-gray-500' : 'text-gray-400'}`}>Intense Learners Coaching Centre</p>
+                <h1 className={`text-base sm:text-xl font-black leading-none ${dm ? 'text-white' : 'text-gray-900'}`}>Fees & Payments</h1>
+                <p className={`text-[10px] sm:text-xs hidden sm:block ${dm ? 'text-gray-500' : 'text-gray-400'}`}>Intense Learners Coaching Centre</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Track Order Button */}
+            <div className="flex items-center gap-1 sm:gap-2">
               <button
                 onClick={() => {
                   const id = prompt('Enter your Order ID:');
@@ -603,27 +607,26 @@ export default function PaymentCheckout() {
                     handleTrackOrder();
                   }
                 }}
-                className={`px-3 py-2 rounded-xl border-2 text-sm font-bold ${dm ? 'border-gray-700 text-gray-300' : 'border-gray-200 text-gray-600'}`}
+                className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl border-2 text-xs sm:text-sm font-bold ${dm ? 'border-gray-700 text-gray-300' : 'border-gray-200 text-gray-600'}`}
               >
-                <Truck className="w-4 h-4 inline mr-1" />
-                Track
+                <Truck className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
+                <span className="hidden sm:inline">Track</span>
               </button>
               
-              {/* Cart bubble */}
               <button
                 onClick={() => setTab('cart')}
-                className={`relative flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl border-2 font-bold text-sm transition-all ${
+                className={`relative flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-xl border-2 font-bold text-xs sm:text-sm transition-all ${
                   tab === 'cart'
                     ? 'bg-violet-600 border-violet-600 text-white'
                     : dm ? 'bg-gray-800 border-gray-700 text-white hover:border-violet-500' : 'bg-white border-gray-200 text-gray-800 hover:border-violet-400'
                 }`}
               >
-                <Wallet className="w-4 h-4" />
+                <Wallet className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Cart</span>
                 {cartItems.length > 0 && (
                   <>
-                    <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center">{cartItems.length}</span>
-                    <span className="text-violet-400 font-black text-sm">₹{fmt(total)}</span>
+                    <span className="absolute -top-2 -right-2 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-red-500 text-white text-[8px] sm:text-[10px] font-black flex items-center justify-center">{cartItems.length}</span>
+                    <span className="text-violet-400 font-black text-[10px] sm:text-sm">₹{fmt(total)}</span>
                   </>
                 )}
               </button>
@@ -631,22 +634,22 @@ export default function PaymentCheckout() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 pb-0 overflow-x-auto">
+          <div className="flex gap-0.5 sm:gap-1 pb-0 overflow-x-auto scrollbar-hide">
             {([
               { id: 'fees',     label: 'Fee Structure', icon: GraduationCap },
-              { id: 'hardcopy', label: 'Order Hardcopy', icon: Printer       },
-              { id: 'cart',     label: cartItems.length > 0 ? `Checkout (${cartItems.length})` : 'Checkout', icon: CreditCard },
+              { id: 'hardcopy', label: 'Hardcopy', icon: Printer },
+              { id: 'cart',     label: cartItems.length > 0 ? `Cart (${cartItems.length})` : 'Checkout', icon: CreditCard },
             ] as const).map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setTab(id)}
-                className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap flex-shrink-0 border-b-2 transition-all -mb-px ${
+                className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-sm font-bold whitespace-nowrap flex-shrink-0 border-b-2 transition-all -mb-px ${
                   tab === id
                     ? 'border-violet-500 text-violet-500'
                     : dm ? 'border-transparent text-gray-500 hover:text-gray-300' : 'border-transparent text-gray-400 hover:text-gray-700'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <Icon className="w-3 h-3 sm:w-4 sm:h-4" />
                 {label}
               </button>
             ))}
@@ -654,12 +657,12 @@ export default function PaymentCheckout() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-8">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
 
         {/* Minimum Order Warning */}
         {cartItems.length > 0 && !meetsMinOrder && (
-          <div className={`mb-4 p-3 rounded-xl border-2 ${dm ? 'bg-amber-950/30 border-amber-900' : 'bg-amber-50 border-amber-200'}`}>
-            <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+          <div className={`mb-4 p-2 sm:p-3 rounded-xl border-2 ${dm ? 'bg-amber-950/30 border-amber-900' : 'bg-amber-50 border-amber-200'}`}>
+            <p className="text-[11px] sm:text-sm font-medium text-amber-600 dark:text-amber-400">
               ⚠️ Minimum order amount is ₹{MIN_ORDER_AMOUNT}. Add more items (₹{MIN_ORDER_AMOUNT - total} more needed)
             </p>
           </div>
@@ -668,41 +671,39 @@ export default function PaymentCheckout() {
         {/* TAB: FEE STRUCTURE */}
         {tab === 'fees' && (
           <div>
-            {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-7">
               {[
-                { icon: Users,      val: '1,200+', label: 'Active Students', c: 'text-blue-500',    bg: dm ? 'bg-blue-950/60'    : 'bg-blue-50'    },
-                { icon: Award,      val: '98%',    label: 'Pass Rate',       c: 'text-emerald-500', bg: dm ? 'bg-emerald-950/60' : 'bg-emerald-50' },
-                { icon: Star,       val: '4.9 ★',  label: 'Student Rating',  c: 'text-amber-500',   bg: dm ? 'bg-amber-950/60'   : 'bg-amber-50'   },
-                { icon: TrendingUp, val: '3× faster',label:'Learning Speed', c: 'text-violet-500',  bg: dm ? 'bg-violet-950/60'  : 'bg-violet-50'  },
+                { icon: Users, val: '1,200+', label: 'Active Students', c: 'text-blue-500', bg: dm ? 'bg-blue-950/60' : 'bg-blue-50' },
+                { icon: Award, val: '98%', label: 'Pass Rate', c: 'text-emerald-500', bg: dm ? 'bg-emerald-950/60' : 'bg-emerald-50' },
+                { icon: Star, val: '4.9 ★', label: 'Student Rating', c: 'text-amber-500', bg: dm ? 'bg-amber-950/60' : 'bg-amber-50' },
+                { icon: TrendingUp, val: '3× faster', label: 'Learning Speed', c: 'text-violet-500', bg: dm ? 'bg-violet-950/60' : 'bg-violet-50' },
               ].map(({ icon: Icon, val, label, c, bg }) => (
-                <div key={label} className={`flex items-center gap-3 p-3 sm:p-4 rounded-2xl border-2 ${dm ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'} shadow-sm`}>
-                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
+                <div key={label} className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-4 rounded-2xl border-2 ${dm ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'} shadow-sm`}>
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
                     <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${c}`} />
                   </div>
                   <div className="min-w-0">
                     <p className={`text-sm sm:text-base font-black ${dm ? 'text-white' : 'text-gray-900'}`}>{val}</p>
-                    <p className={`text-[10px] sm:text-[11px] font-medium truncate ${dm ? 'text-gray-500' : 'text-gray-400'}`}>{label}</p>
+                    <p className={`text-[8px] sm:text-[11px] font-medium truncate ${dm ? 'text-gray-500' : 'text-gray-400'}`}>{label}</p>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Class selector */}
-            <div className="mb-6">
-              <h2 className={`text-lg sm:text-xl font-black mb-3 flex items-center gap-2 ${dm ? 'text-white' : 'text-gray-900'}`}>
-                <GraduationCap className="w-5 h-5 text-violet-500" />
+            <div className="mb-4 sm:mb-6">
+              <h2 className={`text-base sm:text-xl font-black mb-2 sm:mb-3 flex items-center gap-2 ${dm ? 'text-white' : 'text-gray-900'}`}>
+                <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5 text-violet-500" />
                 Select Your Class
               </h2>
               {plansLoading ? (
-                <div className="flex items-center gap-2"><Loader className="w-5 h-5 text-violet-500 animate-spin" /><span className={`text-sm ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Loading plans…</span></div>
+                <div className="flex items-center gap-2"><Loader className="w-4 h-4 sm:w-5 sm:h-5 text-violet-500 animate-spin" /><span className={`text-xs sm:text-sm ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Loading plans…</span></div>
               ) : (
-                <div className="flex gap-2 sm:gap-3 flex-wrap">
+                <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 sm:pb-0">
                   {classes.map(cls => (
                     <button
                       key={cls}
                       onClick={() => setSelectedClass(cls)}
-                      className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl font-black text-sm sm:text-base transition-all border-2 ${
+                      className={`px-3 sm:px-6 py-1.5 sm:py-3 rounded-2xl font-black text-xs sm:text-base transition-all border-2 flex-shrink-0 ${
                         selectedClass === cls
                           ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-transparent shadow-lg shadow-violet-500/25'
                           : dm ? 'bg-gray-900 border-gray-700 text-gray-300 hover:border-violet-500' : 'bg-white border-gray-200 text-gray-700 hover:border-violet-400'
@@ -715,14 +716,12 @@ export default function PaymentCheckout() {
               )}
             </div>
 
-            {/* Plans for selected class */}
             {selectedClass && (
               <>
-                <h3 className={`text-base sm:text-lg font-black mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>
+                <h3 className={`text-sm sm:text-lg font-black mb-3 sm:mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>
                   Fee Plans for {selectedClass}
-                  <span className={`ml-2 text-sm font-medium ${dm ? 'text-gray-500' : 'text-gray-400'}`}>— select one or more subjects</span>
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {plansForClass.map(plan => {
                     const isSelected = !!selectedPlans[plan.id];
                     const save = plan.originalPrice - plan.price;
@@ -732,7 +731,7 @@ export default function PaymentCheckout() {
                       <div
                         key={plan.id}
                         onClick={() => setSelectedPlans(prev => ({ ...prev, [plan.id]: !prev[plan.id] }))}
-                        className={`relative rounded-2xl border-2 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:shadow-xl overflow-hidden ${
+                        className={`relative rounded-2xl border-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-xl overflow-hidden ${
                           isSelected
                             ? dm ? 'border-violet-500 shadow-lg shadow-violet-500/20' : 'border-violet-500 shadow-lg shadow-violet-500/15'
                             : dm ? 'border-gray-800 hover:border-gray-700' : 'border-gray-100 hover:border-gray-200'
@@ -740,44 +739,37 @@ export default function PaymentCheckout() {
                       >
                         <div className={`h-1.5 bg-gradient-to-r ${grad}`} />
                         {plan.popular && (
-                          <div className={`absolute top-3 right-3 px-2 py-0.5 rounded-lg text-[10px] font-black text-white bg-gradient-to-r ${grad} shadow-md`}>
+                          <div className={`absolute top-2 sm:top-3 right-2 sm:right-3 px-1.5 sm:px-2 py-0.5 rounded-lg text-[8px] sm:text-[10px] font-black text-white bg-gradient-to-r ${grad} shadow-md`}>
                             ★ Popular
                           </div>
                         )}
-                        <div className="p-4 sm:p-5">
-                          <div className="flex items-center gap-2.5 mb-4">
-                            <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-md flex-shrink-0`}>
-                              <BookOpen className="w-4 h-4 text-white" />
+                        <div className="p-3 sm:p-5">
+                          <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                            <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-md flex-shrink-0`}>
+                              <BookOpen className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
                             </div>
                             <div>
-                              <h4 className={`font-black text-sm sm:text-base leading-tight ${dm ? 'text-white' : 'text-gray-900'}`}>{plan.subject}</h4>
-                              <p className={`text-[11px] ${dm ? 'text-gray-500' : 'text-gray-400'}`}>{plan.duration} · {plan.class}</p>
+                              <h4 className={`font-black text-xs sm:text-base leading-tight ${dm ? 'text-white' : 'text-gray-900'}`}>{plan.subject}</h4>
+                              <p className={`text-[9px] sm:text-[11px] ${dm ? 'text-gray-500' : 'text-gray-400'}`}>{plan.duration}</p>
                             </div>
                           </div>
-                          <div className="mb-4">
-                            <div className="flex items-baseline gap-2">
-                              <span className={`text-3xl font-black ${dm ? 'text-white' : 'text-gray-900'}`}>₹{fmt(plan.price)}</span>
-                              <span className={`text-sm line-through ${dm ? 'text-gray-600' : 'text-gray-400'}`}>₹{fmt(plan.originalPrice)}</span>
+                          <div className="mb-3 sm:mb-4">
+                            <div className="flex items-baseline gap-1 sm:gap-2">
+                              <span className={`text-xl sm:text-3xl font-black ${dm ? 'text-white' : 'text-gray-900'}`}>₹{fmt(plan.price)}</span>
+                              <span className={`text-xs sm:text-sm line-through ${dm ? 'text-gray-600' : 'text-gray-400'}`}>₹{fmt(plan.originalPrice)}</span>
                             </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-500 text-[11px] font-black">{savePct}% OFF</span>
-                              <span className={`text-[11px] ${dm ? 'text-gray-500' : 'text-gray-400'}`}>Save ₹{fmt(save)}</span>
+                            <div className="flex items-center gap-1 sm:gap-2 mt-1">
+                              <span className="px-1.5 sm:px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-500 text-[9px] sm:text-[11px] font-black">{savePct}% OFF</span>
+                              <span className={`text-[9px] sm:text-[11px] ${dm ? 'text-gray-500' : 'text-gray-400'}`}>Save ₹{fmt(save)}</span>
                             </div>
                           </div>
-                          <ul className="space-y-1.5 mb-4">
-                            {['Live classes', 'Recorded lectures', 'Doubt support', 'Monthly tests', ...(plan.subject === 'All Subjects' ? ['All subject notes PDF', 'Parent updates'] : [])].map(f => (
-                              <li key={f} className={`flex items-center gap-2 text-xs ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-                                <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" /> {f}
-                              </li>
-                            ))}
-                          </ul>
-                          <button className={`w-full py-2.5 rounded-xl text-sm font-black transition-all ${
+                          <button className={`w-full py-1.5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all ${
                             isSelected
                               ? `bg-gradient-to-r ${grad} text-white shadow-md`
                               : dm ? 'bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700' : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100'
                           }`}>
-                            {isSelected ? <span className="flex items-center justify-center gap-1.5"><Check className="w-4 h-4" /> Selected</span>
-                              : <span className="flex items-center justify-center gap-1.5">Select Plan <ArrowRight className="w-4 h-4" /></span>}
+                            {isSelected ? <span className="flex items-center justify-center gap-1"><Check className="w-3 h-3 sm:w-4 sm:h-4" /> Selected</span>
+                              : <span className="flex items-center justify-center gap-1">Select <ArrowRight className="w-3 h-3 sm:w-4 sm:h-4" /></span>}
                           </button>
                         </div>
                       </div>
@@ -787,24 +779,23 @@ export default function PaymentCheckout() {
               </>
             )}
 
-            {/* CTA bar */}
             {Object.values(selectedPlans).some(Boolean) && (
-              <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-2xl border-2 border-violet-500 ${dm ? 'bg-violet-950/30' : 'bg-violet-50'}`}>
-                <div className="flex items-center gap-3">
-                  <Sparkles className="w-5 h-5 text-violet-500 flex-shrink-0" />
+              <div className={`mt-4 sm:mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 sm:p-4 rounded-2xl border-2 border-violet-500 ${dm ? 'bg-violet-950/30' : 'bg-violet-50'}`}>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-violet-500 flex-shrink-0" />
                   <div>
-                    <p className={`font-black text-sm ${dm ? 'text-white' : 'text-gray-900'}`}>
-                      {Object.values(selectedPlans).filter(Boolean).length} plan{Object.values(selectedPlans).filter(Boolean).length > 1 ? 's' : ''} selected
+                    <p className={`font-black text-xs sm:text-sm ${dm ? 'text-white' : 'text-gray-900'}`}>
+                      {Object.values(selectedPlans).filter(Boolean).length} plan(s) selected
                     </p>
-                    <p className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>You can also add printed notes below</p>
+                    <p className={`text-[10px] sm:text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Add printed notes below</p>
                   </div>
                 </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={() => setTab('hardcopy')} className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold border-2 ${dm ? 'border-gray-700 text-gray-300 hover:border-violet-500' : 'border-gray-300 text-gray-700 hover:border-violet-400'}`}>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <button onClick={() => setTab('hardcopy')} className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold border-2 ${dm ? 'border-gray-700 text-gray-300 hover:border-violet-500' : 'border-gray-300 text-gray-700 hover:border-violet-400'}`}>
                     + Add Notes
                   </button>
-                  <button onClick={() => setTab('cart')} className="px-4 py-2 rounded-xl text-xs sm:text-sm font-black bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:shadow-lg transition-all flex items-center gap-1.5">
-                    Checkout <ArrowRight className="w-4 h-4" />
+                  <button onClick={() => setTab('cart')} className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-black bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:shadow-lg transition-all flex items-center justify-center gap-1 sm:gap-1.5">
+                    Checkout <ArrowRight className="w-3 h-3 sm:w-4 sm:h-4" />
                   </button>
                 </div>
               </div>
@@ -812,135 +803,97 @@ export default function PaymentCheckout() {
           </div>
         )}
 
-        {/* TAB: HARDCOPY NOTES - With Thumbnails and Fixed Minus Button */}
+        {/* TAB: HARDCOPY NOTES - With Individual Prices */}
         {tab === 'hardcopy' && (
           <div>
-            <div className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 mb-6 ${dm ? 'bg-amber-950/30 border-amber-900' : 'bg-amber-50 border-amber-200'}`}>
+            <div className={`flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-3 sm:p-5 rounded-2xl border-2 mb-4 sm:mb-6 ${dm ? 'bg-amber-950/30 border-amber-900' : 'bg-amber-50 border-amber-200'}`}>
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20 flex-shrink-0">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20 flex-shrink-0">
                   <Printer className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <p className={`font-black text-base ${dm ? 'text-amber-300' : 'text-amber-800'}`}>Get Printed Notes — Only ₹{HARDCOPY_PRICE}/copy!</p>
-                  <p className={`text-xs ${dm ? 'text-amber-400/60' : 'text-amber-700/60'}`}>High-quality colour print · Free home delivery · 3–5 working days</p>
+                  <p className={`font-black text-sm sm:text-base ${dm ? 'text-amber-300' : 'text-amber-800'}`}>Order Printed Notes</p>
+                  <p className={`text-[10px] sm:text-xs ${dm ? 'text-amber-400/60' : 'text-amber-700/60'}`}>Each note has its own price · Free delivery · 3–5 days</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 mb-5">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4 sm:mb-5">
               <div className="relative flex-1">
-                <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
                 <input
                   type="text" value={noteSearch} onChange={e => setNoteSearch(e.target.value)}
-                  placeholder="Search notes by title or subject…"
-                  className={`w-full pl-9 pr-10 py-2.5 border-2 rounded-xl text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition-all ${dm ? 'bg-gray-900 border-gray-800 text-white placeholder-gray-600' : 'bg-white border-gray-200 text-gray-900'}`}
+                  placeholder="Search notes..."
+                  className={`w-full pl-8 sm:pl-9 pr-8 sm:pr-10 py-2 sm:py-2.5 border-2 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition-all ${dm ? 'bg-gray-900 border-gray-800 text-white placeholder-gray-600' : 'bg-white border-gray-200 text-gray-900'}`}
                 />
               </div>
               <select value={noteSubjectFilter} onChange={e => setNoteSubjectFilter(e.target.value)}
-                className={`px-3 py-2.5 border-2 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-violet-500 outline-none ${dm ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-800'}`}>
+                className={`px-2 sm:px-3 py-2 sm:py-2.5 border-2 rounded-xl text-xs sm:text-sm font-semibold ${dm ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-800'}`}>
                 {noteSubjects.map(s => <option key={s} value={s}>{s === 'all' ? 'All Subjects' : s}</option>)}
               </select>
               <select value={noteClassFilter} onChange={e => setNoteClassFilter(e.target.value)}
-                className={`px-3 py-2.5 border-2 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-violet-500 outline-none ${dm ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-800'}`}>
+                className={`px-2 sm:px-3 py-2 sm:py-2.5 border-2 rounded-xl text-xs sm:text-sm font-semibold ${dm ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-800'}`}>
                 {noteClasses.map(c => <option key={c} value={c}>{c === 'all' ? 'All Classes' : c}</option>)}
               </select>
             </div>
 
             {notesLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader className="w-10 h-10 text-violet-500 animate-spin" />
+              <div className="flex items-center justify-center py-10 sm:py-20">
+                <Loader className="w-8 h-8 sm:w-10 sm:h-10 text-violet-500 animate-spin" />
               </div>
             ) : filteredNotes.length === 0 ? (
-              <div className={`rounded-2xl border-2 p-12 text-center ${dm ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-                <FileText className={`w-16 h-16 mx-auto mb-4 ${dm ? 'text-gray-700' : 'text-gray-300'}`} />
-                <p className={`font-black text-lg mb-1 ${dm ? 'text-white' : 'text-gray-900'}`}>No notes found</p>
+              <div className={`rounded-2xl border-2 p-8 sm:p-12 text-center ${dm ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
+                <FileText className={`w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 ${dm ? 'text-gray-700' : 'text-gray-300'}`} />
+                <p className={`font-black text-base sm:text-lg mb-1 ${dm ? 'text-white' : 'text-gray-900'}`}>No notes found</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {filteredNotes.map(note => {
                   const qty = hardcopyQty[note.id] || 0;
+                  const unitPrice = note.price || 30;
                   return (
-                    <div key={note.id} className={`rounded-2xl border-2 overflow-hidden transition-all hover:shadow-xl ${
-                      qty > 0
-                        ? dm ? 'border-violet-500 shadow-md shadow-violet-500/10' : 'border-violet-400 shadow-md shadow-violet-400/10'
-                        : dm ? 'border-gray-800 hover:border-gray-700' : 'border-gray-100 hover:border-gray-200'
-                    } ${dm ? 'bg-gray-900' : 'bg-white'}`}>
-                      {/* Subject top bar */}
+                    <div key={note.id} className={`rounded-2xl border-2 overflow-hidden ${dm ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
                       <div className={`h-1 bg-gradient-to-r ${getGrad(note.subject)}`} />
-                      
-                      {/* Thumbnail */}
-                      <div className={`relative h-32 ${dm ? 'bg-gradient-to-br from-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'} flex items-center justify-center overflow-hidden`}>
+                      <div className={`relative h-24 sm:h-32 ${dm ? 'bg-gradient-to-br from-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'} flex items-center justify-center overflow-hidden`}>
                         {note.thumbnailUrl ? (
-                          <img 
-                            src={note.thumbnailUrl} 
-                            alt={note.title} 
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = '/note-placeholder.png';
-                            }}
-                          />
+                          <img src={note.thumbnailUrl} alt={note.title} className="w-full h-full object-cover" />
                         ) : (
-                          <FileText className={`w-10 h-10 ${dm ? 'text-gray-700' : 'text-gray-300'}`} />
-                        )}
-                        {note.isPinned && (
-                          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[10px] font-black">
-                            <Star className="w-2.5 h-2.5" fill="currentColor" /> Pinned
-                          </div>
+                          <FileText className={`w-6 h-6 sm:w-10 sm:h-10 ${dm ? 'text-gray-700' : 'text-gray-300'}`} />
                         )}
                         {qty > 0 && (
-                          <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-violet-600 text-white text-[10px] font-black flex items-center justify-center shadow">
+                          <div className="absolute top-2 right-2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-violet-600 text-white text-[8px] sm:text-[10px] font-black flex items-center justify-center shadow">
                             {qty}
                           </div>
                         )}
                       </div>
-
-                      <div className="p-4">
-                        <div className="flex flex-wrap gap-1.5 mb-2">
-                          <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${getSubColor(note.subject, dm)}`}>{note.subject}</span>
-                          <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${dm ? 'bg-blue-900/40 text-blue-300 border-blue-800' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{note.class}</span>
-                          {note.chapter && <span className={`text-[10px] ${dm ? 'text-gray-600' : 'text-gray-400'}`}>Ch. {note.chapter}</span>}
+                      <div className="p-3 sm:p-4">
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          <span className={`px-1.5 sm:px-2 py-0.5 rounded-lg text-[8px] sm:text-[10px] font-bold border ${getSubColor(note.subject, dm)}`}>{note.subject}</span>
+                          <span className={`px-1.5 sm:px-2 py-0.5 rounded-lg text-[8px] sm:text-[10px] font-bold border ${dm ? 'bg-blue-900/40 text-blue-300 border-blue-800' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{note.class}</span>
                         </div>
-                        <h3 className={`text-sm font-bold line-clamp-2 leading-snug mb-2 ${dm ? 'text-white' : 'text-gray-900'}`}>{note.title}</h3>
-                        
-                        <div className={`flex items-center justify-between p-3 rounded-xl border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-100'}`}>
+                        <h3 className={`text-xs sm:text-sm font-bold mb-1 sm:mb-2 line-clamp-2 ${dm ? 'text-white' : 'text-gray-900'}`}>{note.title}</h3>
+                        <div className={`flex items-center justify-between p-2 sm:p-3 rounded-xl border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-100'}`}>
                           <div>
-                            <p className={`text-lg font-black ${dm ? 'text-white' : 'text-gray-900'}`}>₹{HARDCOPY_PRICE}</p>
+                            <p className={`text-base sm:text-lg font-black ${dm ? 'text-white' : 'text-gray-900'}`}>₹{unitPrice}<span className="text-xs font-normal ml-0.5">/copy</span></p>
                           </div>
                           {qty === 0 ? (
                             <button onClick={() => setHardcopyQty(prev => ({ ...prev, [note.id]: 1 }))}
-                              className="px-3 py-2 rounded-xl bg-violet-600 text-white text-xs font-black hover:bg-violet-700 transition-all">
+                              className="px-2 sm:px-3 py-1 sm:py-2 rounded-xl bg-violet-600 text-white text-[10px] sm:text-xs font-black">
                               Add
                             </button>
                           ) : (
-                            <div className="flex items-center gap-2">
-                              <button 
-                                onClick={() => setHardcopyQty(prev => { 
-                                  const n = { ...prev }; 
-                                  if (n[note.id] <= 1) delete n[note.id]; 
-                                  else n[note.id]--; 
-                                  return n; 
-                                })}
-                                className={`w-8 h-8 rounded-xl text-base font-black flex items-center justify-center transition-all ${
-                                  dm 
-                                    ? 'bg-gray-700 text-white hover:bg-red-600' 
-                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                }`}
-                              >
-                                −
-                              </button>
-                              <span className={`font-black text-sm ${dm ? 'text-white' : 'text-gray-900'}`}>{qty}</span>
-                              <button 
-                                onClick={() => setHardcopyQty(prev => ({ ...prev, [note.id]: (prev[note.id] || 0) + 1 }))}
-                                className="w-8 h-8 rounded-xl bg-violet-600 text-white font-black text-base hover:bg-violet-700 transition-all"
-                              >
-                                +
-                              </button>
+                            <div className="flex items-center gap-1 sm:gap-2">
+                              <button onClick={() => setHardcopyQty(prev => { const n = { ...prev }; if (n[note.id] <= 1) delete n[note.id]; else n[note.id]--; return n; })}
+                                className="w-6 h-6 sm:w-8 sm:h-8 rounded-xl bg-gray-200 dark:bg-gray-700 font-black text-sm sm:text-base">-</button>
+                              <span className="font-black text-xs sm:text-sm">{qty}</span>
+                              <button onClick={() => setHardcopyQty(prev => ({ ...prev, [note.id]: (prev[note.id] || 0) + 1 }))}
+                                className="w-6 h-6 sm:w-8 sm:h-8 rounded-xl bg-violet-600 text-white font-black text-sm sm:text-base">+</button>
                             </div>
                           )}
                         </div>
                         {qty > 0 && (
-                          <p className="text-[11px] text-center mt-2 font-bold text-violet-500">
-                            {qty} cop{qty > 1 ? 'ies' : 'y'} × ₹{HARDCOPY_PRICE} = ₹{qty * HARDCOPY_PRICE}
+                          <p className="text-[10px] sm:text-[11px] text-center mt-1 font-medium text-violet-500">
+                            Total: ₹{unitPrice * qty}
                           </p>
                         )}
                       </div>
@@ -949,31 +902,56 @@ export default function PaymentCheckout() {
                 })}
               </div>
             )}
+            
+            {/* Sticky bottom bar for selected notes */}
+            {Object.keys(hardcopyQty).length > 0 && (
+              <div className={`sticky bottom-4 mt-4 sm:mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 rounded-2xl border-2 border-violet-500 shadow-2xl shadow-violet-500/20 backdrop-blur-md ${dm ? 'bg-gray-900/95' : 'bg-white/95'}`}>
+                <div>
+                  <p className={`font-black text-xs sm:text-sm ${dm ? 'text-white' : 'text-gray-900'}`}>
+                    {Object.values(hardcopyQty).reduce((s, q) => s + q, 0)} note(s) selected
+                  </p>
+                  <p className="text-xs sm:text-sm font-bold text-violet-500">
+                    Total: ₹{Object.entries(hardcopyQty).reduce((sum, [id, qty]) => {
+                      const note = notes.find(n => n.id === id);
+                      return sum + (note?.price || 30) * qty;
+                    }, 0)} · Free delivery 🚚
+                  </p>
+                </div>
+                <button
+                  onClick={() => setTab('cart')}
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-xs sm:text-sm hover:shadow-lg transition-all"
+                >
+                  Proceed to Checkout →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {/* TAB: CHECKOUT */}
         {tab === 'cart' && (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            <div className="lg:col-span-3 space-y-5">
+          <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
+            <div className="flex-1 space-y-4 sm:space-y-5">
               <div className={`rounded-2xl border-2 overflow-hidden ${dm ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-                <div className={`p-5 border-b-2 ${dm ? 'border-gray-800' : 'border-gray-100'}`}>
-                  <h3 className={`font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Your Cart ({cartItems.length} items)</h3>
+                <div className={`p-3 sm:p-5 border-b-2 ${dm ? 'border-gray-800' : 'border-gray-100'}`}>
+                  <h3 className={`font-black text-sm sm:text-base ${dm ? 'text-white' : 'text-gray-900'}`}>Your Cart ({cartItems.length} items)</h3>
                 </div>
                 {cartItems.length === 0 ? (
-                  <div className="p-12 text-center">
-                    <p>Cart is empty</p>
-                    <button onClick={() => setTab('fees')} className="mt-4 px-4 py-2 bg-violet-600 text-white rounded-xl">Browse Plans</button>
+                  <div className="p-8 sm:p-12 text-center">
+                    <p className="text-sm sm:text-base">Cart is empty</p>
+                    <button onClick={() => setTab('fees')} className="mt-3 sm:mt-4 px-3 sm:px-4 py-1.5 sm:py-2 bg-violet-600 text-white rounded-xl text-xs sm:text-sm">Browse Plans</button>
                   </div>
                 ) : (
                   <div>
                     {cartItems.map((item, idx) => (
-                      <div key={item.id} className={`flex justify-between p-4 ${idx < cartItems.length - 1 ? 'border-b' : ''} ${dm ? 'border-gray-800' : 'border-gray-100'}`}>
+                      <div key={item.id} className={`flex justify-between p-3 sm:p-4 ${idx < cartItems.length - 1 ? 'border-b' : ''} ${dm ? 'border-gray-800' : 'border-gray-100'}`}>
                         <div>
-                          <p className="font-medium">{item.name}</p>
-                          {item.qty && <p className="text-sm text-gray-500">Qty: {item.qty}</p>}
+                          <p className="font-medium text-xs sm:text-sm">{item.name}</p>
+                          {item.qty && item.unitPrice && (
+                            <p className="text-[10px] sm:text-xs text-gray-500">₹{item.unitPrice} × {item.qty}</p>
+                          )}
                         </div>
-                        <p className="font-bold">₹{fmt(item.price)}</p>
+                        <p className="font-bold text-xs sm:text-sm">₹{fmt(item.price)}</p>
                       </div>
                     ))}
                   </div>
@@ -982,24 +960,24 @@ export default function PaymentCheckout() {
 
               {/* Address Form */}
               {hasHardcopy && cartItems.length > 0 && (
-                <div className={`rounded-2xl border-2 p-5 ${dm ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
+                <div className={`rounded-2xl border-2 p-3 sm:p-5 ${dm ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
                   <button onClick={() => setShowAddress(!showAddress)} className="w-full flex justify-between items-center">
-                    <h3 className={`font-black ${dm ? 'text-white' : 'text-gray-900'}`}>Delivery Address</h3>
-                    <ChevronDown className={`transform ${showAddress ? 'rotate-180' : ''}`} />
+                    <h3 className={`font-black text-sm sm:text-base ${dm ? 'text-white' : 'text-gray-900'}`}>Delivery Address</h3>
+                    <ChevronDown className={`w-4 h-4 sm:w-5 sm:h-5 transform ${showAddress ? 'rotate-180' : ''}`} />
                   </button>
                   {showAddress && (
-                    <div className="mt-4 space-y-3">
+                    <div className="mt-3 sm:mt-4 space-y-2 sm:space-y-3">
                       <input type="text" placeholder="Full Name" value={address.name} onChange={e => setAddress({...address, name: e.target.value})}
-                        className={`w-full p-3 rounded-xl border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} />
+                        className={`w-full p-2 sm:p-3 rounded-xl border-2 text-sm ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} />
                       <input type="tel" placeholder="Phone Number" value={address.phone} onChange={e => setAddress({...address, phone: e.target.value})}
-                        className={`w-full p-3 rounded-xl border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} />
+                        className={`w-full p-2 sm:p-3 rounded-xl border-2 text-sm ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} />
                       <textarea placeholder="Full Address" value={address.address} onChange={e => setAddress({...address, address: e.target.value})}
-                        className={`w-full p-3 rounded-xl border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} rows={2} />
-                      <div className="grid grid-cols-2 gap-3">
+                        className={`w-full p-2 sm:p-3 rounded-xl border-2 text-sm ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} rows={2} />
+                      <div className="grid grid-cols-2 gap-2 sm:gap-3">
                         <input type="text" placeholder="City" value={address.city} onChange={e => setAddress({...address, city: e.target.value})}
-                          className={`p-3 rounded-xl border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} />
+                          className={`p-2 sm:p-3 rounded-xl border-2 text-sm ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} />
                         <input type="text" placeholder="PIN Code" value={address.pincode} onChange={e => setAddress({...address, pincode: e.target.value})}
-                          className={`p-3 rounded-xl border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} />
+                          className={`p-2 sm:p-3 rounded-xl border-2 text-sm ${dm ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} />
                       </div>
                     </div>
                   )}
@@ -1007,10 +985,10 @@ export default function PaymentCheckout() {
               )}
             </div>
 
-            <div className="lg:col-span-2">
-              <div className={`rounded-2xl border-2 p-5 sticky top-20 ${dm ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-                <h3 className={`font-black text-lg mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>Order Summary</h3>
-                <div className="space-y-2">
+            <div className="lg:w-96">
+              <div className={`rounded-2xl border-2 p-3 sm:p-5 sticky top-20 ${dm ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
+                <h3 className={`font-black text-base sm:text-lg mb-3 sm:mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>Order Summary</h3>
+                <div className="space-y-2 text-sm sm:text-base">
                   <div className="flex justify-between">
                     <span>Subtotal</span>
                     <span>₹{fmt(subtotal)}</span>
@@ -1022,24 +1000,24 @@ export default function PaymentCheckout() {
                     </div>
                   )}
                   <div className="border-t pt-2 mt-2">
-                    <div className="flex justify-between font-bold text-lg">
+                    <div className="flex justify-between font-bold text-base sm:text-lg">
                       <span>Total</span>
                       <span className="text-violet-500">₹{fmt(total)}</span>
                     </div>
                   </div>
                 </div>
                 <button
-                  onClick={handlePlaceOrder}
-                  disabled={orderLoading || cartItems.length === 0 || !meetsMinOrder}
-                  className="w-full mt-6 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black disabled:opacity-50"
+                  onClick={handleOpenPaymentModal}
+                  disabled={cartItems.length === 0 || !meetsMinOrder}
+                  className="w-full mt-4 sm:mt-6 py-2 sm:py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-sm sm:text-base disabled:opacity-50"
                 >
-                  {orderLoading ? <Loader className="w-5 h-5 animate-spin mx-auto" /> : 'Place Order'}
+                  Proceed to Payment
                 </button>
                 {!meetsMinOrder && cartItems.length > 0 && (
-                  <p className="text-xs text-center mt-3 text-amber-500">Minimum order: ₹{MIN_ORDER_AMOUNT}</p>
+                  <p className="text-[10px] sm:text-xs text-center mt-2 sm:mt-3 text-amber-500">Minimum order: ₹{MIN_ORDER_AMOUNT}</p>
                 )}
                 {hasOnlyFees && cartItems.length > 0 && (
-                  <p className="text-xs text-center mt-3 text-blue-500">💳 Only QR payment available for fee plans</p>
+                  <p className="text-[10px] sm:text-xs text-center mt-2 sm:mt-3 text-blue-500">💳 Only QR payment available</p>
                 )}
               </div>
             </div>

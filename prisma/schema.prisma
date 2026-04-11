@@ -552,6 +552,8 @@ model Note {
   fileSize    String
   thumbnailUrl String?
   
+  price       Int      @default(30)  // Default ₹30 per copy
+
   // Status
   isPublished Boolean  @default(true)
   isPinned    Boolean  @default(false)

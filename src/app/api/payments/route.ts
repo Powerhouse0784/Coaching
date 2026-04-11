@@ -311,6 +311,7 @@ export async function GET(req: NextRequest) {
             isPinned: true,
             downloads: true,
             views: true,
+            price: true,
             teacher: {
               select: {
                 user: { select: { name: true, avatar: true } },
