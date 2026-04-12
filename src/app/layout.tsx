@@ -10,6 +10,11 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'EduElite - Best Online Coaching Platform',
   description: 'Learn from the best instructors with our comprehensive AI-powered courses',
+  icons: {
+    icon: '/coaching-icon.png',
+    apple: '/coaching-icon.png',
+    shortcut: '/coaching-icon.png',
+  },
 }
 
 export default function RootLayout({

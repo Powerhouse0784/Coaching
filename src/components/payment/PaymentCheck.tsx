@@ -528,7 +528,7 @@ export default function PaymentCheckout() {
               <div className="flex justify-center mb-4">
                 <div className="w-40 h-40 sm:w-48 sm:h-48 bg-white rounded-2xl shadow-lg flex items-center justify-center p-3 sm:p-4">
                   <img 
-                    src="/paytm-qr-placeholder.png" 
+                    src="/paytm-qr-placeholder.jpeg" 
                     alt="Paytm QR Code"
                     className="w-full h-full object-contain"
                     onError={(e) => {
