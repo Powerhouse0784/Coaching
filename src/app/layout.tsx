@@ -8,7 +8,7 @@ import { Providers } from './providers/providers'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'EduElite - Best Online Coaching Platform',
+  title: 'Intense Learners - Learn With Intensity',
   description: 'Learn from the best instructors with our comprehensive AI-powered courses',
   icons: {
     icon: '/coaching-icon.png',
