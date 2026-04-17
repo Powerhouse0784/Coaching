@@ -12,7 +12,7 @@ import {
   Calendar, FileText, UserCheck, Globe, Headphones, Lock,
   ArrowLeft, Home, LogOut, User as UserIcon, Eye, EyeOff, 
   Mail, Chrome, AlertCircle, CheckCircle2, Settings, Edit,
-  Moon, Sun, BookOpen, Twitter, Facebook, Instagram, Linkedin,
+  Moon, Sun, BookOpen, Twitter, Facebook, Instagram, Linkedin, Youtube,
   KeyRound, CheckCircle, Send
 } from 'lucide-react';
 
@@ -47,16 +47,17 @@ function CoachingLogo({ className = "w-full h-full" }: { className?: string }) {
 
 // ─── Social icons map ──────────────────────────────────────────────────────────
 const socialIcons: Record<string, React.ReactNode> = {
-  twitter:   <Twitter  className="w-4 h-4" />,
   facebook:  <Facebook className="w-4 h-4" />,
-  instagram: <Instagram className="w-4 h-4" />,
+  Chrome: <Chrome className="w-4 h-4" />,
   linkedin:  <Linkedin  className="w-4 h-4" />,
+  youtube:   <Youtube   className="w-4 h-4" />,
 };
 const socialLinks: Record<string, string> = {
-  twitter:   'https://twitter.com/',
   facebook:  'https://facebook.com/',
-  instagram: 'https://instagram.com/',
+  Chrome:    'https://maps.app.goo.gl/ByExkEywvFAxG84c9?g_st=aw',
   linkedin:  'https://linkedin.com/',
+  youtube:   'https://youtube.com/',
+
 };
 
 // ─── Forgot Password Page ──────────────────────────────────────────────────────
@@ -240,7 +241,6 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void;
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Role selector */}
             <div>
               <label className={`block text-xs sm:text-sm font-medium mb-2 sm:mb-3 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>I am a:</label>
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -289,7 +289,6 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void;
                 <input type="checkbox" className={`w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${dm ? 'border-gray-600' : ''}`} />
                 <span className={`text-xs sm:text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>Remember me</span>
               </label>
-              {/* ── FIX 3: Working forgot password button ── */}
               <button type="button" onClick={() => setShowForgot(true)}
                 className={`text-xs sm:text-sm font-medium transition-colors ${dm ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}>
                 Forgot password?
@@ -586,25 +585,25 @@ const ProtectedLanding = () => {
   const handleLogout = async () => { await signOut({ callbackUrl: '/' }); setCurrentScreen('home'); setShowUserMenu(false); };
   const handleProfileUpdate = async (data: any) => { setUserProfile(data); await update(); };
 
+  // ── CHANGE 3: Removed stats value (>) from bottom of each platformFeature card ──
   const platformFeatures = [
-    { id: 'notes',        icon: BookOpen,    title: 'Study Notes Library',    description: 'Access comprehensive study materials and notes shared by expert teachers',          color: 'from-blue-500 to-cyan-500',    stats: '1000+ Notes Available', tag: 'Most Popular',  component: <NotesLibrary /> },
-    { id: 'assignments',  icon: FileText,    title: 'Smart Assignments',       description: 'AI-powered assignment system with automatic grading and detailed feedback',         color: 'from-purple-500 to-pink-500',  stats: '10K+ Completed',        tag: 'Top Rated',     component: <StudentAssignmentDashboard /> },
-    { id: 'study-planner',icon: Brain,       title: 'AI Study Planner',        description: 'Get personalized study schedules based on your goals, pace, and performance',       color: 'from-indigo-500 to-purple-500',stats: '95% Success Rate',       tag: 'AI Powered',    component: <StudyPlanner /> },
-    { id: 'teacher',      icon: UserCheck,   title: 'Teacher Dashboard',       description: 'Comprehensive management tools for educators to track and mentor students',         color: 'from-orange-500 to-red-500',   stats: '200+ Teachers',         tag: 'Professional',  component: <TeacherInterface /> },
-    { id: 'quizzes',      icon: Target,      title: 'Practice & Mock Tests',   description: 'Unlimited quizzes with instant AI evaluation and performance analytics',            color: 'from-green-500 to-teal-500',   stats: '50K+ Questions',        tag: 'Exam Ready',    component: <QuizInterface /> },
-    { id: 'videos',       icon: Play,        title: 'Video Library',           description: 'Access thousands of high-quality recorded lectures available 24/7',                  color: 'from-rose-500 to-pink-500',    stats: '1M+ Hours Watched',     tag: 'On Demand',     component: <VideoPlayer /> },
-    { id: 'doubts',       icon: MessageSquare,title:'Instant Doubt Solving',   description: 'Get answers from AI tutor instantly or connect with expert mentors',                color: 'from-yellow-500 to-orange-500',stats: '24/7 Available',        tag: 'Always Active', component: <DoubtComponent /> },
-    { id: 'payments',     icon: CreditCard,  title: 'Secure Payments',         description: 'Safe and encrypted payment gateway with multiple payment options',                  color: 'from-emerald-500 to-green-500',stats: 'Bank-Level Security',   tag: 'Protected',     component: <PaymentDemo /> },
+    { id: 'notes',        icon: BookOpen,      title: 'Study Notes Library',  description: 'Access comprehensive study materials and notes shared by expert teachers', color: 'from-blue-500 to-cyan-500',     tag: 'Most Popular'  , component: <NotesLibrary /> },
+    { id: 'assignments',  icon: FileText,      title: 'Smart Assignments',    description: 'AI-powered assignment system with automatic grading and detailed feedback', color: 'from-purple-500 to-pink-500',   tag: 'Top Rated'     , component: <StudentAssignmentDashboard /> },
+    { id: 'study-planner',icon: Brain,         title: 'AI Study Planner',     description: 'Get personalized study schedules based on your goals, pace, and performance', color: 'from-indigo-500 to-purple-500', tag: 'AI Powered'    , component: <StudyPlanner /> },
+    { id: 'teacher',      icon: UserCheck,     title: 'Teacher Dashboard',    description: 'Comprehensive management tools for educators to track and mentor students', color: 'from-orange-500 to-red-500',    tag: 'Professional'  , component: <TeacherInterface /> },
+    { id: 'quizzes',      icon: Target,        title: 'Practice & Mock Tests', description: 'Unlimited quizzes with instant AI evaluation and performance analytics', color: 'from-green-500 to-teal-500',    tag: 'Exam Ready'    , component: <QuizInterface /> },
+    { id: 'videos',       icon: Play,          title: 'Video Library',        description: 'Access high-quality recorded lectures available 24/7',                     color: 'from-rose-500 to-pink-500',     tag: 'On Demand'     , component: <VideoPlayer /> },
+    { id: 'doubts',       icon: MessageSquare, title: 'Instant Doubt Solving', description: 'Get answers from AI tutor instantly or connect with expert mentors',       color: 'from-yellow-500 to-orange-500', tag: 'Always Active' , component: <DoubtComponent /> },
+    { id: 'payments',     icon: CreditCard,    title: 'Secure Payments',      description: 'Safe and encrypted payment gateway with multiple payment options',         color: 'from-emerald-500 to-green-500', tag: 'Protected'     , component: <PaymentDemo /> },
   ];
 
   const stats = [
-    { value: '50K+', label: 'Active Students', icon: Users },
+    { value: '100+', label: 'Active Students', icon: Users },
     { value: '95%',  label: 'Success Rate',    icon: Trophy },
-    { value: '200+', label: 'Expert Teachers', icon: GraduationCap },
+    { value: '4',    label: 'Expert Teachers', icon: GraduationCap },
     { value: '24/7', label: 'Support',         icon: Clock },
   ];
 
-  // ── FIX 5: Testimonials with real images from public folder ──
   const testimonials = [
     {
       name: 'Tanzeel', role: 'JEE Aspirant', image: '/testimonials/student1.jpg', initials: 'T',
@@ -636,6 +635,9 @@ const ProtectedLanding = () => {
   const goHome = () => setCurrentScreen('home');
   const currentFeature = platformFeatures.find(f => f.id === currentScreen);
 
+  // ── CHANGE 2: scrollToContact helper — navigates to /contact ──
+  const handleBookDemo = () => { router.push('/contact'); };
+
   const userMenuProps = {
     session, darkMode, toggleDarkMode,
     onEditProfile: () => { setShowEditProfile(true); setShowUserMenu(false); setMobileMenuOpen(false); },
@@ -645,7 +647,6 @@ const ProtectedLanding = () => {
     userProfile,
   };
 
-  // Pass darkMode into auth pages so they render correctly
   if (authScreen === 'login')    return <LoginPage    onSwitchToRegister={() => setAuthScreen('register')} onBack={() => setAuthScreen(null)} darkMode={dm} />;
   if (authScreen === 'register') return <RegisterPage onSwitchToLogin={() => setAuthScreen('login')}       onBack={() => setAuthScreen(null)} darkMode={dm} />;
 
@@ -704,9 +705,6 @@ const ProtectedLanding = () => {
                     {currentFeature.tag && <span className="bg-white/20 text-white px-2.5 py-0.5 rounded-full text-xs font-bold">{currentFeature.tag}</span>}
                   </div>
                   <p className="text-white/90 text-xs sm:text-sm lg:text-base">{currentFeature.description}</p>
-                </div>
-                <div className="bg-white/20 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl flex-shrink-0">
-                  <p className="text-white font-semibold text-xs sm:text-sm">{currentFeature.stats}</p>
                 </div>
               </div>
             </div>
@@ -864,7 +862,7 @@ const ProtectedLanding = () => {
                 <span className="block bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-400 bg-clip-text text-transparent mt-1 sm:mt-2">Intensity</span>
               </h1>
               <p className="text-sm sm:text-base lg:text-xl text-purple-100 mb-6 sm:mb-8 leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                Join 50,000+ students achieving their dreams with personalized AI study plans, live expert classes, and 24/7 intelligent support.
+                Join 100+ students achieving their dreams with personalized AI study plans, live expert classes, and 24/7 intelligent support.
               </p>
               <div className="flex flex-col xs:flex-row gap-3 sm:gap-4 mb-6 sm:mb-10 justify-center lg:justify-start">
                 <button onClick={() => session ? openFeature('study-planner') : setAuthScreen('register')}
@@ -872,12 +870,12 @@ const ProtectedLanding = () => {
                   {session ? 'Go to Dashboard' : 'Start Learning Free'}
                   <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
                 </button>
-                <button className="group bg-white/10 backdrop-blur-lg text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-sm sm:text-base lg:text-lg hover:bg-white/20 transition-all flex items-center justify-center gap-2 border-2 border-white/20">
-                  <Play className="w-4 h-4 sm:w-5 sm:h-5" />Watch Demo
+                {/* ── CHANGE 2: Book a Demo navigates to /contact ── */}
+                <button onClick={handleBookDemo} className="group bg-white/10 backdrop-blur-lg text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-sm sm:text-base lg:text-lg hover:bg-white/20 transition-all flex items-center justify-center gap-2 border-2 border-white/20">
+                  <Calendar className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />Book a Demo
                 </button>
               </div>
 
-              {/* ── FIX 4: Student images from public folder ── */}
               <div className="flex flex-wrap items-center gap-3 sm:gap-6 justify-center lg:justify-start">
                 <div className="flex -space-x-2 sm:-space-x-3">
                   {[1, 2, 3, 4, 5].map(i => (
@@ -889,7 +887,6 @@ const ProtectedLanding = () => {
                         height={40}
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          // Fallback to letter avatar if image missing
                           const target = e.currentTarget as HTMLImageElement;
                           target.style.display = 'none';
                           if (target.parentElement) {
@@ -904,32 +901,42 @@ const ProtectedLanding = () => {
                   <div className="flex text-yellow-400 mb-0.5 sm:mb-1">
                     {[1,2,3,4,5].map(i => <Star key={i} className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />)}
                   </div>
-                  <p className="text-purple-200 text-xs sm:text-sm font-medium">50,000+ Happy Students</p>
+                  <p className="text-purple-200 text-xs sm:text-sm font-medium">100+ Happy Students</p>
                 </div>
               </div>
             </div>
 
+            {/* ── CHANGE 1: Hero card with looping video from public folder ── */}
             <div className="relative hidden lg:block">
               <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-3xl blur-3xl opacity-20 animate-pulse" />
               <div className="relative bg-white/10 backdrop-blur-2xl rounded-3xl p-6 lg:p-8 border border-white/20 shadow-2xl">
                 <div className="bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl p-4 lg:p-6 mb-4 lg:mb-6">
-                  <div className="flex items-center justify-between mb-3 lg:mb-4">
-                    <span className="text-white font-semibold text-xs sm:text-sm">Live Now</span>
-                    <span className="flex items-center gap-2 bg-red-500 text-white px-2 lg:px-3 py-1 rounded-full text-xs font-semibold">
-                      <span className="w-2 h-2 bg-white rounded-full animate-pulse" />1,247 watching
-                    </span>
+                  {/*
+                    VIDEO NOTE:
+                    Place your video at: public/hero-video.mp4
+                    It will work in production (Vercel / any host) because Next.js
+                    serves everything in /public at the root URL automatically.
+                    No need for UploadThing for a static promotional video.
+                    Just drop the file in your /public folder and it works everywhere.
+                  */}
+                  <div className="aspect-video rounded-xl overflow-hidden relative">
+                    <video
+                      src="/hero-video.mp4"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                    {/* Subtle overlay gradient at the bottom */}
+                    <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-blue-900/40 to-transparent pointer-events-none" />
                   </div>
-                  <div className="aspect-video bg-gradient-to-br from-indigo-900 to-purple-900 rounded-xl flex items-center justify-center mb-3 lg:mb-4 relative overflow-hidden">
-                    <Play className="w-12 h-12 lg:w-16 lg:h-16 text-white opacity-80" />
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 lg:p-4">
-                      <div className="flex items-center gap-2 text-white text-xs"><Clock className="w-3 h-3" /><span>2:34:12</span></div>
-                    </div>
-                  </div>
-                  <h3 className="text-white font-bold text-base lg:text-lg mb-1">Advanced Physics - Thermodynamics</h3>
-                  <p className="text-purple-200 text-xs sm:text-sm">Dr. Rajesh Sharma • JEE Advanced Batch</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 lg:gap-4">
-                  {[{ icon: Brain, label: 'AI Tutor', sub: 'Instant Answers', color: 'text-yellow-400' }, { icon: Target, label: 'Mock Tests', sub: 'Unlimited Access', color: 'text-green-400' }].map(({ icon: Icon, label, sub, color }) => (
+                  {[
+                    { icon: Brain, label: 'AI Tutor',   sub: 'Instant Answers',   color: 'text-yellow-400' },
+                    { icon: Target, label: 'Mock Tests', sub: 'Unlimited Access', color: 'text-green-400'  },
+                  ].map(({ icon: Icon, label, sub, color }) => (
                     <div key={label} className="bg-white/10 backdrop-blur-lg rounded-xl p-3 lg:p-4 border border-white/20">
                       <Icon className={`w-6 h-6 lg:w-8 lg:h-8 ${color} mb-2`} />
                       <p className="text-white font-bold text-base lg:text-lg">{label}</p>
@@ -983,8 +990,8 @@ const ProtectedLanding = () => {
                 </div>
                 <h3 className={`text-sm sm:text-base lg:text-xl font-bold mb-1.5 sm:mb-2 lg:mb-3 group-hover:text-indigo-600 transition-colors ${dm ? 'text-white' : 'text-gray-900'}`}>{feature.title}</h3>
                 <p className={`text-xs sm:text-sm mb-3 sm:mb-4 leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{feature.description}</p>
-                <div className={`flex items-center justify-between pt-3 border-t ${dm ? 'border-gray-700' : 'border-gray-100'}`}>
-                  <span className={`text-[10px] sm:text-xs font-medium ${dm ? 'text-gray-500' : 'text-gray-500'}`}>{feature.stats}</span>
+                {/* ── CHANGE 3: Bottom row — only arrow, no stats value ── */}
+                <div className={`flex items-center justify-end pt-3 border-t ${dm ? 'border-gray-700' : 'border-gray-100'}`}>
                   <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 group-hover:translate-x-1 transition-transform" />
                 </div>
                 <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity pointer-events-none`} />
@@ -1016,9 +1023,9 @@ const ProtectedLanding = () => {
             <div className="grid sm:grid-cols-3 gap-5 sm:gap-8 lg:gap-12 relative">
               <div className="hidden sm:block absolute top-10 sm:top-12 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600" />
               {[
-                { step: '01', title: 'Create Account',    desc: 'Sign up in 30 seconds and tell us your goals',       icon: GraduationCap, color: 'from-blue-500 to-cyan-500'   },
-                { step: '02', title: 'AI Personalization',desc: 'Get your custom study plan powered by AI',            icon: Brain,         color: 'from-purple-500 to-pink-500' },
-                { step: '03', title: 'Start Learning',    desc: 'Access all features and begin your journey',          icon: Zap,           color: 'from-orange-500 to-red-500'  },
+                { step: '01', title: 'Create Account',    desc: 'Sign up in 30 seconds and tell us your goals',  icon: GraduationCap, color: 'from-blue-500 to-cyan-500'   },
+                { step: '02', title: 'AI Personalization',desc: 'Get your custom study plan powered by AI',       icon: Brain,         color: 'from-purple-500 to-pink-500' },
+                { step: '03', title: 'Start Learning',    desc: 'Access all features and begin your journey',     icon: Zap,           color: 'from-orange-500 to-red-500'  },
               ].map((item, idx) => (
                 <div key={idx} className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 lg:p-8 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-2 border border-gray-200">
                   <div className={`inline-flex items-center justify-center w-14 h-14 lg:w-20 lg:h-20 bg-gradient-to-br ${item.color} rounded-xl sm:rounded-2xl mb-4 sm:mb-6 shadow-lg`}>
@@ -1050,15 +1057,9 @@ const ProtectedLanding = () => {
                     {[...Array(t.rating)].map((_, i) => <Star key={i} className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 fill-current" />)}
                   </div>
                   <p className="text-base sm:text-xl lg:text-2xl xl:text-3xl text-white mb-5 sm:mb-8 leading-relaxed font-light">"{t.text}"</p>
-                  {/* ── FIX 5: Testimonial images from public folder ── */}
                   <div className="flex items-center gap-3 sm:gap-4 flex-col sm:flex-row text-center sm:text-left">
                     <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center flex-shrink-0 shadow-lg">
-                      <Image
-                        src={t.image}
-                        alt={t.name}
-                        width={64}
-                        height={64}
-                        className="w-full h-full object-cover"
+                      <Image src={t.image} alt={t.name} width={64} height={64} className="w-full h-full object-cover"
                         onError={(e) => {
                           const target = e.currentTarget as HTMLImageElement;
                           target.style.display = 'none';
@@ -1109,7 +1110,7 @@ const ProtectedLanding = () => {
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-2xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-4 sm:mb-6 px-4">Ready to Transform Your Future?</h2>
           <p className="text-sm sm:text-base lg:text-xl xl:text-2xl text-purple-100 mb-7 sm:mb-10 max-w-3xl mx-auto px-4">
-            Join 50,000+ students already learning with Intense Learners. Start your free trial today—no credit card required.
+            Join 100+ students already learning with Intense Learners. Start your free trial today.
           </p>
           <div className="flex flex-col xs:flex-row gap-3 sm:gap-4 justify-center px-4">
             <button onClick={() => session ? openFeature('study-planner') : setAuthScreen('register')}
@@ -1117,11 +1118,15 @@ const ProtectedLanding = () => {
               {session ? 'Go to Your Dashboard' : 'Start Free Trial Now'}
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 group-hover:translate-x-1 transition-transform" />
             </button>
-            <button className="bg-white/10 backdrop-blur-lg text-white px-6 sm:px-8 lg:px-10 py-3.5 sm:py-4 lg:py-5 rounded-xl font-bold text-base sm:text-lg lg:text-xl hover:bg-white/20 transition-all inline-flex items-center justify-center gap-2 sm:gap-3 border-2 border-white/30">
+            {/* ── CHANGE 2: CTA Book a Demo also navigates to /contact ── */}
+            <button onClick={handleBookDemo} className="bg-white/10 backdrop-blur-lg text-white px-6 sm:px-8 lg:px-10 py-3.5 sm:py-4 lg:py-5 rounded-xl font-bold text-base sm:text-lg lg:text-xl hover:bg-white/20 transition-all inline-flex items-center justify-center gap-2 sm:gap-3 border-2 border-white/30">
               <Calendar className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />Book a Demo
             </button>
           </div>
-          <p className="text-purple-200 mt-4 sm:mt-6 text-xs sm:text-sm px-4">✓ 14-day free trial  ✓ No credit card required  ✓ Cancel anytime</p>
+          {/* ── CHANGE 4: Added gap between the two ✓ items ── */}
+          <p className="text-purple-200 mt-4 sm:mt-6 text-xs sm:text-sm px-4">
+            ✓ 5-day free trial &nbsp;&nbsp;&nbsp; ✓ Cancel anytime
+          </p>
         </div>
       </div>
 
@@ -1138,9 +1143,8 @@ const ProtectedLanding = () => {
                 </div>
               </div>
               <p className="text-gray-400 leading-relaxed mb-5 text-xs sm:text-sm lg:text-base">
-                Transforming education through artificial intelligence and expert teaching. Join thousands of students achieving their dreams.
+                Transforming education through artificial intelligence and expert teaching. Join Hundreds of students achieving their dreams.
               </p>
-              {/* ── FIX 6: Real social icons using lucide-react ── */}
               <div className="flex gap-3">
                 {Object.entries(socialLinks).map(([platform, url]) => (
                   <a key={platform} href={url} target="_blank" rel="noopener noreferrer"
@@ -1179,11 +1183,11 @@ const ProtectedLanding = () => {
 
           <div className="border-t border-gray-800 pt-5 sm:pt-8">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4 text-xs sm:text-sm">
-              <p className="text-gray-400 text-center sm:text-left">© 2026 Intense Learners Technologies Pvt. Ltd. All rights reserved.</p>
+              <p className="text-gray-400 text-center sm:text-left">© 2026 Intense Learners. All rights reserved.</p>
               <div className="flex flex-wrap gap-2 sm:gap-6 text-gray-400 text-center justify-center">
                 <span>Made with ❤️ in India</span>
                 <span className="hidden sm:inline">•</span>
-                <span>Trusted by 50,000+ students</span>
+                <span>Trusted by 100+ students</span>
               </div>
             </div>
           </div>

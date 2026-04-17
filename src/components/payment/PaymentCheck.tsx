@@ -732,8 +732,8 @@ export default function PaymentCheckout() {
           <div>
             <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-7">
               {[
-                { icon: Users, val: '1,200+', label: 'Active Students', c: 'text-blue-500', bg: dm ? 'bg-blue-950/60' : 'bg-blue-50' },
-                { icon: Award, val: '98%', label: 'Pass Rate', c: 'text-emerald-500', bg: dm ? 'bg-emerald-950/60' : 'bg-emerald-50' },
+                { icon: Users, val: '100+', label: 'Active Students', c: 'text-blue-500', bg: dm ? 'bg-blue-950/60' : 'bg-blue-50' },
+                { icon: Award, val: '95%', label: 'Pass Rate', c: 'text-emerald-500', bg: dm ? 'bg-emerald-950/60' : 'bg-emerald-50' },
                 { icon: Star, val: '4.9 ★', label: 'Student Rating', c: 'text-amber-500', bg: dm ? 'bg-amber-950/60' : 'bg-amber-50' },
                 { icon: TrendingUp, val: '3× faster', label: 'Learning Speed', c: 'text-violet-500', bg: dm ? 'bg-violet-950/60' : 'bg-violet-50' },
               ].map(({ icon: Icon, val, label, c, bg }) => (

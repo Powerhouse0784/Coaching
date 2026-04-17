@@ -5,10 +5,11 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { 
   Mail, Phone, MapPin, Send, CheckCircle, AlertCircle, 
-  MessageSquare, Clock, ArrowLeft, Linkedin, Twitter, 
+  MessageSquare, Clock, ArrowLeft, Linkedin, Twitter, Youtube, Chrome,
   Instagram, Facebook, HelpCircle, User, Briefcase,
   X, Minimize2, Maximize2, Bot, Sparkles, Loader2
 } from 'lucide-react';
+import Google from 'next-auth/providers/google';
 
 export default function ContactPage() {
   const { data: session } = useSession();
@@ -33,7 +34,7 @@ export default function ContactPage() {
   const [chatMessages, setChatMessages] = useState([
     {
       role: 'assistant',
-      content: 'Hi! 👋 I\'m your AI assistant. How can I help you today? I can answer questions about our courses, pricing, enrollment, or anything else about EduElite!'
+      content: 'Hi! 👋 I\'m your AI assistant. How can I help you today? I can answer questions about our courses, pricing, enrollment, or anything else about Intense Learners!'
     }
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -154,32 +155,32 @@ export default function ContactPage() {
     {
       icon: Mail,
       title: 'Email Us',
-      value: 'support@eduelite.com',
+      value: 'pandeyranu087@gmail.com',
       description: 'Send us an email anytime',
       color: 'from-blue-500 to-cyan-500',
-      link: 'mailto:support@eduelite.com'
+      link: 'mailto:pandeyranu087@gmail.com'
     },
     {
       icon: Phone,
       title: 'Call Us',
-      value: '+91 98104 93309',
+      value: '+91 91186 10664',
       description: 'Mon-Fri from 9am to 6pm',
       color: 'from-green-500 to-emerald-500',
-      link: 'tel:+919810493309'
+      link: 'tel:+919118610664'
     },
     {
       icon: MapPin,
       title: 'Visit Us',
-      value: 'Sohna, Haryana, India',
+      value: 'Hanuman Mandir, Adarsh Nagar, Jeevan Park, Delhi 110059',
       description: 'Come say hello at our office',
       color: 'from-purple-500 to-pink-500',
-      link: 'https://maps.google.com/?q=Sohna,Haryana,India'
+      link: 'https://maps.app.goo.gl/ByExkEywvFAxG84c9?g_st=aw'
     },
     {
       icon: Clock,
       title: 'Working Hours',
-      value: '9:00 AM - 6:00 PM',
-      description: 'Monday to Friday',
+      value: '8:00 AM - 10:00 PM',
+      description: 'All Days',
       color: 'from-orange-500 to-red-500',
       link: null
     }
@@ -207,7 +208,7 @@ export default function ContactPage() {
     },
     {
       question: 'Do you offer phone support?',
-      answer: 'Phone support is available for premium users. Contact us to learn more.'
+      answer: 'Phone support is available for all users. Contact us to learn more.'
     }
   ];
 
@@ -446,11 +447,11 @@ export default function ContactPage() {
             <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-2xl border-2 p-6 hover:shadow-xl transition-shadow duration-300`}>
               <h3 className={`font-bold ${darkMode ? 'text-gray-100' : 'text-gray-900'} mb-4`}>Follow Us</h3>
               <div className="flex gap-3">
-                <a href="#" className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300">
-                  <Linkedin className="w-5 h-5" />
+                <a href="https://maps.app.goo.gl/ByExkEywvFAxG84c9?g_st=aw" className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300">
+                  <Chrome className="w-5 h-5" />
                 </a>
                 <a href="#" className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-400 dark:text-blue-400 rounded-lg flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300">
-                  <Twitter className="w-5 h-5" />
+                  <Youtube className="w-5 h-5" />
                 </a>
                 <a href="#" className="w-10 h-10 bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-lg flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300">
                   <Instagram className="w-5 h-5" />
@@ -466,9 +467,8 @@ export default function ContactPage() {
               <Clock className="w-8 h-8 text-indigo-600 mb-3" />
               <h3 className={`font-bold ${darkMode ? 'text-gray-100' : 'text-gray-900'} mb-2`}>Office Hours</h3>
               <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'} space-y-1`}>
-                <p>Monday - Friday: 9:00 AM - 6:00 PM</p>
-                <p>Saturday: 10:00 AM - 4:00 PM</p>
-                <p>Sunday: Closed</p>
+                <p>All Days : 8:00 AM - 10:00 PM</p>
+                
               </div>
             </div>
           </div>

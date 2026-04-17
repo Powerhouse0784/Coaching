@@ -8,21 +8,21 @@ import Razorpay from "razorpay";
 
 // ── Fee Plans config ──
 export const FEE_PLANS = [
-  { id: "cls10-math",    class: "Class 10", subject: "Mathematics", price: 900,  originalPrice: 1200, duration: "3 Months", popular: false },
-  { id: "cls10-sci",     class: "Class 10", subject: "Science",     price: 900,  originalPrice: 1200, duration: "3 Months", popular: false },
-  { id: "cls10-eng",     class: "Class 10", subject: "English",     price: 700,  originalPrice: 999,  duration: "3 Months", popular: false },
-  { id: "cls10-sst",     class: "Class 10", subject: "Social Sc.",  price: 700,  originalPrice: 999,  duration: "3 Months", popular: false },
-  { id: "cls10-all",     class: "Class 10", subject: "All Subjects",price: 2999, originalPrice: 4796, duration: "3 Months", popular: true  },
-  { id: "cls11-math",    class: "Class 11", subject: "Mathematics", price: 1100, originalPrice: 1499, duration: "3 Months", popular: false },
-  { id: "cls11-phy",     class: "Class 11", subject: "Physics",     price: 1100, originalPrice: 1499, duration: "3 Months", popular: false },
-  { id: "cls11-chem",    class: "Class 11", subject: "Chemistry",   price: 1100, originalPrice: 1499, duration: "3 Months", popular: false },
-  { id: "cls11-bio",     class: "Class 11", subject: "Biology",     price: 1100, originalPrice: 1499, duration: "3 Months", popular: false },
-  { id: "cls11-all",     class: "Class 11", subject: "All Subjects",price: 3499, originalPrice: 5996, duration: "3 Months", popular: true  },
-  { id: "cls12-math",    class: "Class 12", subject: "Mathematics", price: 1200, originalPrice: 1699, duration: "3 Months", popular: false },
-  { id: "cls12-phy",     class: "Class 12", subject: "Physics",     price: 1200, originalPrice: 1699, duration: "3 Months", popular: false },
-  { id: "cls12-chem",    class: "Class 12", subject: "Chemistry",   price: 1200, originalPrice: 1699, duration: "3 Months", popular: false },
-  { id: "cls12-bio",     class: "Class 12", subject: "Biology",     price: 1200, originalPrice: 1699, duration: "3 Months", popular: false },
-  { id: "cls12-all",     class: "Class 12", subject: "All Subjects",price: 3999, originalPrice: 6796, duration: "3 Months", popular: true  },
+  { id: "cls10-math",    class: "Class 10", subject: "Mathematics", price: 700,  originalPrice: 1200, duration: "1 Month", popular: false },
+  { id: "cls10-sci",     class: "Class 10", subject: "Science",     price: 700,  originalPrice: 1200, duration: "1 Month", popular: false },
+  { id: "cls10-eng",     class: "Class 10", subject: "English",     price: 700,  originalPrice: 999,  duration: "1 Month", popular: false },
+  { id: "cls10-sst",     class: "Class 10", subject: "Social Sc.",  price: 700,  originalPrice: 999,  duration: "1 Month", popular: false },
+  { id: "cls10-all",     class: "Class 10", subject: "All Subjects",price: 2500, originalPrice: 4398, duration: "1 Month", popular: true  },
+  { id: "cls11-math",    class: "Class 11", subject: "Mathematics", price: 900, originalPrice: 1399, duration: "1 Month", popular: false },
+  { id: "cls11-phy",     class: "Class 11", subject: "Physics",     price: 900, originalPrice: 1399, duration: "1 Month", popular: false },
+  { id: "cls11-chem",    class: "Class 11", subject: "Chemistry",   price: 900, originalPrice: 1399, duration: "1 Month", popular: false },
+  { id: "cls11-bio",     class: "Class 11", subject: "Biology",     price: 900, originalPrice: 1399, duration: "1 Month", popular: false },
+  { id: "cls11-all",     class: "Class 11", subject: "Any 4 Subjects",price: 3300, originalPrice: 5596, duration: "1 Month", popular: true  },
+  { id: "cls12-math",    class: "Class 12", subject: "Mathematics", price: 1000, originalPrice: 1499, duration: "1 Month", popular: false },
+  { id: "cls12-phy",     class: "Class 12", subject: "Physics",     price: 1000, originalPrice: 1499, duration: "1 Month", popular: false },
+  { id: "cls12-chem",    class: "Class 12", subject: "Chemistry",   price: 1000, originalPrice: 1499, duration: "1 Month", popular: false },
+  { id: "cls12-bio",     class: "Class 12", subject: "Biology",     price: 1000, originalPrice: 1499, duration: "1 Month", popular: false },
+  { id: "cls12-all",     class: "Class 12", subject: "Any 4 Subjects",price: 3700, originalPrice: 6796, duration: "1 Month", popular: true  },
 ];
 
 export const COUPONS: Record<string, { type: "percent" | "flat"; value: number; label: string; minOrder: number }> = {
