@@ -49,14 +49,14 @@ function CoachingLogo({ className = "w-full h-full" }: { className?: string }) {
 const socialIcons: Record<string, React.ReactNode> = {
   facebook:  <Facebook className="w-4 h-4" />,
   Chrome: <Chrome className="w-4 h-4" />,
-  linkedin:  <Linkedin  className="w-4 h-4" />,
+  Instagram:  <Instagram  className="w-4 h-4" />,
   youtube:   <Youtube   className="w-4 h-4" />,
 };
 const socialLinks: Record<string, string> = {
-  facebook:  'https://facebook.com/',
+  facebook:  'https://www.facebook.com/share/1E77DTHG5w/',
   Chrome:    'https://maps.app.goo.gl/ByExkEywvFAxG84c9?g_st=aw',
-  linkedin:  'https://linkedin.com/',
-  youtube:   'https://youtube.com/',
+  Instagram:  'https://www.instagram.com/intense_learners?igsh=MTVtNTV2Znd6cGVrZQ==',
+  youtube:   'https://youtube.com/@intenselearners?si=Yq48WR0-3XJ3FBEz',
 
 };
 

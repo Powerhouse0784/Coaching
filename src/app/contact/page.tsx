@@ -450,13 +450,13 @@ export default function ContactPage() {
                 <a href="https://maps.app.goo.gl/ByExkEywvFAxG84c9?g_st=aw" className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300">
                   <Chrome className="w-5 h-5" />
                 </a>
-                <a href="#" className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-400 dark:text-blue-400 rounded-lg flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300">
+                <a href="https://youtube.com/@intenselearners?si=Yq48WR0-3XJ3FBEz" className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-400 dark:text-blue-400 rounded-lg flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300">
                   <Youtube className="w-5 h-5" />
                 </a>
-                <a href="#" className="w-10 h-10 bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-lg flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300">
+                <a href="https://www.instagram.com/intense_learners?igsh=MTVtNTV2Znd6cGVrZQ==" className="w-10 h-10 bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-lg flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300">
                   <Instagram className="w-5 h-5" />
                 </a>
-                <a href="#" className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300">
+                <a href="https://www.facebook.com/share/1E77DTHG5w/" className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300">
                   <Facebook className="w-5 h-5" />
                 </a>
               </div>
