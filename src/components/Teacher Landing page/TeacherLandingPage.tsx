@@ -102,21 +102,21 @@ export default function TeacherDashboard() {
   const goHome = () => setCurrentScreen('home');
 
   const platformFeatures = [
-    { id: 'notes',       icon: BookOpen,      title: 'Study Notes',      description: 'Upload and manage study materials and notes for your students',           color: 'from-blue-500 to-cyan-500',     stats: '45 Notes',      tag: 'Popular',   component: <NotesManager /> },
-    { id: 'assignments', icon: FileText,       title: 'Assignments',      description: 'Create and grade assignments with AI-powered assistance',                color: 'from-purple-500 to-pink-500',   stats: '12 Pending',    tag: 'Active',    component: <AssignmentManager /> },
-    { id: 'students',    icon: Users,          title: 'Students',         description: 'Monitor progress, attendance, and performance analytics',                color: 'from-green-500 to-emerald-500', stats: '150 Active',    tag: 'Dashboard', component: <StudentDashboard /> },
-    { id: 'ai-assistant',icon: Brain,          title: 'AI Assistant',     description: 'Get instant help with lesson plans, content creation, and strategies',  color: 'from-indigo-500 to-purple-500', stats: '24/7 Available', tag: 'AI Powered',component: <AIAssistant /> },
-    { id: 'library',     icon: Play,           title: 'Video Library',    description: 'Upload and organize your recorded lecture videos',                      color: 'from-rose-500 to-pink-500',     stats: '45 Videos',     tag: 'On Demand', component: <VideoLibraryManager /> },
-    { id: 'doubts',      icon: MessageSquare,  title: 'Student Doubts',   description: 'Answer questions and provide guidance 24/7',                            color: 'from-yellow-500 to-orange-500', stats: '23 New',        tag: 'Active',    component: <DoubtManager /> },
-    { id: 'chat',        icon: MessageSquare,  title: 'Teacher Chat',     description: 'Connect and collaborate with fellow teachers',                          color: 'from-cyan-500 to-blue-500',     stats: 'Live Chat',     tag: 'New',       component: <TeacherChat /> },
-    { id: 'schedule',    icon: Calendar,       title: 'Schedule',         description: 'Manage your teaching calendar and sessions',                            color: 'from-teal-500 to-cyan-500',     stats: '5 Today',       tag: 'Planner',   component: <ScheduleManager /> },
+    { id: 'notes',       icon: BookOpen,      title: 'Study Notes',      description: 'Upload and manage study materials and notes for your students',           color: 'from-blue-500 to-cyan-500',        tag: 'Popular',   component: <NotesManager /> },
+    { id: 'assignments', icon: FileText,       title: 'Assignments',      description: 'Create and grade assignments with AI-powered assistance',                color: 'from-purple-500 to-pink-500',      tag: 'Active',    component: <AssignmentManager /> },
+    { id: 'students',    icon: Users,          title: 'Students',         description: 'Monitor progress, attendance, and performance analytics',                color: 'from-green-500 to-emerald-500',     tag: 'Dashboard', component: <StudentDashboard /> },
+    { id: 'ai-assistant',icon: Brain,          title: 'AI Assistant',     description: 'Get instant help with lesson plans, content creation, and strategies',  color: 'from-indigo-500 to-purple-500',  tag: 'AI Powered',component: <AIAssistant /> },
+    { id: 'library',     icon: Play,           title: 'Video Library',    description: 'Upload and organize your recorded lecture videos',                      color: 'from-rose-500 to-pink-500',          tag: 'On Demand', component: <VideoLibraryManager /> },
+    { id: 'doubts',      icon: MessageSquare,  title: 'Student Doubts',   description: 'Answer questions and provide guidance 24/7',                            color: 'from-yellow-500 to-orange-500',         tag: 'Active',    component: <DoubtManager /> },
+    { id: 'chat',        icon: MessageSquare,  title: 'Teacher Chat',     description: 'Connect and collaborate with fellow teachers',                          color: 'from-cyan-500 to-blue-500',        tag: 'New',       component: <TeacherChat /> },
+    { id: 'schedule',    icon: Calendar,       title: 'Schedule',         description: 'Manage your teaching calendar and sessions',                            color: 'from-teal-500 to-cyan-500',            tag: 'Planner',   component: <ScheduleManager /> },
   ];
 
   const stats = [
     { value: '150',  label: 'Total Students', icon: Users       },
-    { value: '4.8',  label: 'Avg Rating',     icon: Star        },
-    { value: '₹45K', label: 'This Month',     icon: DollarSign  },
-    { value: '95%',  label: 'Success Rate',   icon: Trophy      },
+    { value: '4.9',  label: 'Avg Rating',     icon: Star        },
+    { value: 'Free', label: 'This Month',     icon: DollarSign  },
+    { value: '98%',  label: 'Success Rate',   icon: Trophy      },
   ];
 
   const currentFeature = platformFeatures.find(f => f.id === currentScreen);
@@ -254,7 +254,7 @@ export default function TeacherDashboard() {
                   <p className="text-white/90 text-xs sm:text-sm lg:text-base">{currentFeature.description}</p>
                 </div>
                 <div className="bg-white/20 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl flex-shrink-0">
-                  <p className="text-white font-semibold text-xs sm:text-sm">{currentFeature.stats}</p>
+                  
                 </div>
               </div>
             </div>
@@ -412,8 +412,8 @@ export default function TeacherDashboard() {
             </h1>
 
             <p className="text-sm sm:text-base lg:text-xl text-purple-100 mb-6 sm:mb-8 leading-relaxed max-w-2xl mx-auto">
-              You have <span className="font-bold text-white">45 notes</span> uploaded and{' '}
-              <span className="font-bold text-white">23 new questions</span> to answer. Keep inspiring minds!
+              You have <span className="font-bold text-white"> notes</span> uploaded and{' '}
+              <span className="font-bold text-white"> new questions</span> to answer. Keep inspiring minds!
             </p>
 
             <div className="flex flex-col xs:flex-row gap-3 sm:gap-4 mb-6 sm:mb-10 justify-center">
@@ -454,7 +454,7 @@ export default function TeacherDashboard() {
                 <div className="flex text-yellow-400 mb-0.5 sm:mb-1">
                   {[1,2,3,4,5].map(i => <Star key={i} className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />)}
                 </div>
-                <p className="text-purple-200 text-xs sm:text-sm font-medium">4.8 Average Rating from 150 Students</p>
+                <p className="text-purple-200 text-xs sm:text-sm font-medium">4.9 Average Rating from 150 Students</p>
               </div>
             </div>
           </div>
@@ -515,7 +515,7 @@ export default function TeacherDashboard() {
                 </p>
 
                 <div className={`flex items-center justify-between pt-3 border-t ${dm ? 'border-gray-700' : 'border-gray-100'}`}>
-                  <span className={`text-[10px] sm:text-xs font-medium ${dm ? 'text-gray-500' : 'text-gray-500'}`}>{feature.stats}</span>
+                  
                   <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 group-hover:translate-x-1 transition-transform" />
                 </div>
 
@@ -547,7 +547,7 @@ export default function TeacherDashboard() {
           <div className="border-t border-gray-800 pt-5 sm:pt-8 mt-6 sm:mt-8">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4 text-xs sm:text-sm">
               <p className="text-gray-400 text-center sm:text-left">
-                © 2026 Intense Learners Technologies Pvt. Ltd. All rights reserved.
+                © 2026 Intense Learners. All rights reserved.
               </p>
               <div className="flex flex-wrap gap-2 sm:gap-6 text-gray-400 text-center justify-center">
                 <span>Made with ❤️ for Teachers</span>
