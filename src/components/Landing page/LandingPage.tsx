@@ -13,7 +13,7 @@ import {
   ArrowLeft, Home, LogOut, User as UserIcon, Eye, EyeOff, 
   Mail, Chrome, AlertCircle, CheckCircle2, Settings, Edit,
   Moon, Sun, BookOpen, Twitter, Facebook, Instagram, Linkedin, Youtube,
-  KeyRound, CheckCircle, Send
+  KeyRound, CheckCircle, Send, LogIn, UserPlus
 } from 'lucide-react';
 
 // Import your components
@@ -585,7 +585,6 @@ const ProtectedLanding = () => {
   const handleLogout = async () => { await signOut({ callbackUrl: '/' }); setCurrentScreen('home'); setShowUserMenu(false); };
   const handleProfileUpdate = async (data: any) => { setUserProfile(data); await update(); };
 
-  // ── CHANGE 3: Removed stats value (>) from bottom of each platformFeature card ──
   const platformFeatures = [
     { id: 'notes',        icon: BookOpen,      title: 'Study Notes Library',  description: 'Access comprehensive study materials and notes shared by expert teachers', color: 'from-blue-500 to-cyan-500',     tag: 'Most Popular'  , component: <NotesLibrary /> },
     { id: 'assignments',  icon: FileText,      title: 'Smart Assignments',    description: 'AI-powered assignment system with automatic grading and detailed feedback', color: 'from-purple-500 to-pink-500',   tag: 'Top Rated'     , component: <StudentAssignmentDashboard /> },
@@ -635,7 +634,6 @@ const ProtectedLanding = () => {
   const goHome = () => setCurrentScreen('home');
   const currentFeature = platformFeatures.find(f => f.id === currentScreen);
 
-  // ── CHANGE 2: scrollToContact helper — navigates to /contact ──
   const handleBookDemo = () => { router.push('/contact'); };
 
   const userMenuProps = {
@@ -650,7 +648,7 @@ const ProtectedLanding = () => {
   if (authScreen === 'login')    return <LoginPage    onSwitchToRegister={() => setAuthScreen('register')} onBack={() => setAuthScreen(null)} darkMode={dm} />;
   if (authScreen === 'register') return <RegisterPage onSwitchToLogin={() => setAuthScreen('login')}       onBack={() => setAuthScreen(null)} darkMode={dm} />;
 
-  // ── Feature Screen ────────────────────────────────────────────────────────
+  // Feature Screen
   if (currentScreen !== 'home' && currentFeature && session) {
     return (
       <div className={`min-h-screen transition-colors ${dm ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
@@ -723,11 +721,11 @@ const ProtectedLanding = () => {
     );
   }
 
-  // ── Home / Landing Screen ──────────────────────────────────────────────────
+  // Home / Landing Screen
   return (
     <div className={`min-h-screen transition-colors ${dm ? 'bg-gray-900' : 'bg-white'}`}>
 
-      {/* ── Navbar ── */}
+      {/* Navbar */}
       <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? `${dm ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-lg shadow-lg py-2 sm:py-3` : 'bg-transparent py-3 sm:py-4'}`}>
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
@@ -763,10 +761,18 @@ const ProtectedLanding = () => {
                   {showUserMenu && <UserMenu {...userMenuProps} />}
                 </div>
               ) : (
-                <button onClick={() => setAuthScreen('register')}
-                  className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 lg:px-6 py-2 lg:py-2.5 rounded-xl font-semibold hover:shadow-xl hover:scale-105 transition-all text-sm lg:text-base">
-                  Start Free Trial
-                </button>
+                <div className="flex items-center gap-3">
+                  {/* Login Button */}
+                  <button onClick={() => setAuthScreen('login')}
+                    className="flex items-center gap-2 border-2 border-white/30 text-white px-5 py-2 rounded-xl font-semibold hover:bg-white/10 transition-all text-sm lg:text-base">
+                    <LogIn className="w-4 h-4" />Login
+                  </button>
+                  {/* Register Button */}
+                  <button onClick={() => setAuthScreen('register')}
+                    className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-5 py-2 rounded-xl font-semibold hover:shadow-xl hover:scale-105 transition-all text-sm lg:text-base">
+                    <UserPlus className="w-4 h-4" />Register
+                  </button>
+                </div>
               )}
             </div>
 
@@ -829,10 +835,16 @@ const ProtectedLanding = () => {
                     </button>
                   </>
                 ) : (
-                  <button onClick={() => { setAuthScreen('register'); setMobileMenuOpen(false); }}
-                    className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-2.5 sm:py-3 rounded-xl font-semibold hover:shadow-xl transition-all text-sm sm:text-base">
-                    Start Free Trial
-                  </button>
+                  <div className="flex flex-col gap-3">
+                    <button onClick={() => { setAuthScreen('login'); setMobileMenuOpen(false); }}
+                      className="flex items-center justify-center gap-2 border-2 border-indigo-600 text-indigo-600 px-4 py-2.5 rounded-xl font-semibold hover:bg-indigo-50 transition-all text-sm sm:text-base">
+                      <LogIn className="w-4 h-4" />Login
+                    </button>
+                    <button onClick={() => { setAuthScreen('register'); setMobileMenuOpen(false); }}
+                      className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:shadow-xl transition-all text-sm sm:text-base">
+                      <UserPlus className="w-4 h-4" />Register
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -844,7 +856,7 @@ const ProtectedLanding = () => {
       {showEditProfile && <EditProfileModal isOpen={showEditProfile} onClose={() => setShowEditProfile(false)} userProfile={userProfile} onUpdate={handleProfileUpdate} darkMode={dm} />}
       {showSettings    && <SettingsModal    isOpen={showSettings}    onClose={() => setShowSettings(false)}    darkMode={dm} onDarkModeToggle={toggleDarkMode} />}
 
-      {/* ── Hero ── */}
+      {/* Hero */}
       <div className="relative bg-gradient-to-br from-indigo-950 via-purple-900 to-pink-900 overflow-hidden pt-20 pb-12 sm:pt-28 sm:pb-16 lg:pt-32 lg:pb-28">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-30" />
         <div className="absolute top-20 left-10 w-40 h-40 sm:w-64 sm:h-64 lg:w-72 lg:h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
@@ -870,7 +882,6 @@ const ProtectedLanding = () => {
                   {session ? 'Go to Dashboard' : 'Start Learning Free'}
                   <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
                 </button>
-                {/* ── CHANGE 2: Book a Demo navigates to /contact ── */}
                 <button onClick={handleBookDemo} className="group bg-white/10 backdrop-blur-lg text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-sm sm:text-base lg:text-lg hover:bg-white/20 transition-all flex items-center justify-center gap-2 border-2 border-white/20">
                   <Calendar className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />Book a Demo
                 </button>
@@ -906,19 +917,11 @@ const ProtectedLanding = () => {
               </div>
             </div>
 
-            {/* ── CHANGE 1: Hero card with looping video from public folder ── */}
+            {/* Hero card with looping video */}
             <div className="relative hidden lg:block">
               <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-3xl blur-3xl opacity-20 animate-pulse" />
               <div className="relative bg-white/10 backdrop-blur-2xl rounded-3xl p-6 lg:p-8 border border-white/20 shadow-2xl">
                 <div className="bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl p-4 lg:p-6 mb-4 lg:mb-6">
-                  {/*
-                    VIDEO NOTE:
-                    Place your video at: public/hero-video.mp4
-                    It will work in production (Vercel / any host) because Next.js
-                    serves everything in /public at the root URL automatically.
-                    No need for UploadThing for a static promotional video.
-                    Just drop the file in your /public folder and it works everywhere.
-                  */}
                   <div className="aspect-video rounded-xl overflow-hidden relative">
                     <video
                       src="/hero-video.mp4"
@@ -928,7 +931,6 @@ const ProtectedLanding = () => {
                       playsInline
                       className="w-full h-full object-cover"
                     />
-                    {/* Subtle overlay gradient at the bottom */}
                     <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-blue-900/40 to-transparent pointer-events-none" />
                   </div>
                 </div>
@@ -963,7 +965,7 @@ const ProtectedLanding = () => {
         </div>
       </div>
 
-      {/* ── Platform Features ── */}
+      {/* Platform Features */}
       <div id="platform" className={`py-14 sm:py-20 lg:py-28 ${dm ? 'bg-gray-900' : 'bg-gradient-to-b from-white via-gray-50 to-white'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10 sm:mb-14 lg:mb-16">
@@ -990,7 +992,6 @@ const ProtectedLanding = () => {
                 </div>
                 <h3 className={`text-sm sm:text-base lg:text-xl font-bold mb-1.5 sm:mb-2 lg:mb-3 group-hover:text-indigo-600 transition-colors ${dm ? 'text-white' : 'text-gray-900'}`}>{feature.title}</h3>
                 <p className={`text-xs sm:text-sm mb-3 sm:mb-4 leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{feature.description}</p>
-                {/* ── CHANGE 3: Bottom row — only arrow, no stats value ── */}
                 <div className={`flex items-center justify-end pt-3 border-t ${dm ? 'border-gray-700' : 'border-gray-100'}`}>
                   <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 group-hover:translate-x-1 transition-transform" />
                 </div>
@@ -1010,7 +1011,7 @@ const ProtectedLanding = () => {
         </div>
       </div>
 
-      {/* ── How It Works ── */}
+      {/* How It Works */}
       {!session && (
         <div id="how-it-works" className="py-14 sm:py-20 lg:py-28 bg-gradient-to-br from-indigo-50 to-purple-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1041,7 +1042,7 @@ const ProtectedLanding = () => {
         </div>
       )}
 
-      {/* ── Testimonials ── */}
+      {/* Testimonials */}
       <div id="testimonials" className="py-14 sm:py-20 lg:py-28 bg-gradient-to-br from-indigo-950 via-purple-900 to-pink-900 relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PHBhdGggZD0iTTM2IDM0djItaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6bTAtNHYyaDJ2LTJ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-50" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1088,7 +1089,7 @@ const ProtectedLanding = () => {
         </div>
       </div>
 
-      {/* ── Benefits ── */}
+      {/* Benefits */}
       <div className={`py-10 sm:py-14 lg:py-16 ${dm ? 'bg-gray-900' : 'bg-white'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-3 md:grid-cols-6 gap-3 sm:gap-5 lg:gap-6">
@@ -1104,7 +1105,7 @@ const ProtectedLanding = () => {
         </div>
       </div>
 
-      {/* ── CTA ── */}
+      {/* CTA */}
       <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 py-14 sm:py-20 lg:py-28 relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzR2Mi1oMnYtMnptMC00djJoMnYtMnptMC00djJoMnYtMnptMC00djJoMnYtMnoiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-50" />
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -1118,19 +1119,17 @@ const ProtectedLanding = () => {
               {session ? 'Go to Your Dashboard' : 'Start Free Trial Now'}
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 group-hover:translate-x-1 transition-transform" />
             </button>
-            {/* ── CHANGE 2: CTA Book a Demo also navigates to /contact ── */}
             <button onClick={handleBookDemo} className="bg-white/10 backdrop-blur-lg text-white px-6 sm:px-8 lg:px-10 py-3.5 sm:py-4 lg:py-5 rounded-xl font-bold text-base sm:text-lg lg:text-xl hover:bg-white/20 transition-all inline-flex items-center justify-center gap-2 sm:gap-3 border-2 border-white/30">
               <Calendar className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />Book a Demo
             </button>
           </div>
-          {/* ── CHANGE 4: Added gap between the two ✓ items ── */}
           <p className="text-purple-200 mt-4 sm:mt-6 text-xs sm:text-sm px-4">
             ✓ 5-day free trial &nbsp;&nbsp;&nbsp; ✓ Cancel anytime
           </p>
         </div>
       </div>
 
-      {/* ── Footer ── */}
+      {/* Footer */}
       <footer className="bg-gray-900 text-white py-10 sm:py-14 lg:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-8 sm:gap-10 lg:gap-12 mb-8 sm:mb-12">
