@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     const baseUrl = (
       process.env.NEXT_PUBLIC_APP_URL ||
       process.env.NEXTAUTH_URL ||
-      "http://localhost:3000"
+      "https://intense-learners.vercel.app/"
     ).replace(/\/$/, "");
 
     const resetUrl = `${baseUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
