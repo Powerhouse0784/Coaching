@@ -228,7 +228,7 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void;
             </div>
           )}
 
-          <button onClick={() => signIn('google', { callbackUrl: '/' })} type="button"
+          {/* <button onClick={() => signIn('google', { callbackUrl: '/' })} type="button"
             className={`w-full flex items-center justify-center gap-3 border-2 rounded-xl py-2.5 sm:py-3 px-4 transition-colors mb-5 sm:mb-6 text-sm sm:text-base font-medium ${dm ? 'border-gray-600 text-gray-200 hover:bg-gray-700' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
             <Chrome className="w-4 h-4 sm:w-5 sm:h-5" />Continue with Google
           </button>
@@ -238,7 +238,7 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void;
             <div className="relative flex justify-center text-xs sm:text-sm">
               <span className={`px-4 ${dm ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'}`}>Or continue with email</span>
             </div>
-          </div>
+          </div> */}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -379,17 +379,17 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void;
           {error   && <div className={`mb-4 p-3 sm:p-4 rounded-xl flex items-center gap-3 border ${dm ? 'bg-red-950 border-red-800 text-red-300' : 'bg-red-50 border-red-200 text-red-600'}`}><AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" /><p className="text-xs sm:text-sm">{error}</p></div>}
           {success && <div className={`mb-4 p-3 sm:p-4 rounded-xl flex items-center gap-3 border ${dm ? 'bg-green-950 border-green-800 text-green-300' : 'bg-green-50 border-green-200 text-green-600'}`}><CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" /><p className="text-xs sm:text-sm">{success}</p></div>}
 
-          <button onClick={() => signIn('google', { callbackUrl: '/' })} type="button"
+          {/* <button onClick={() => signIn('google', { callbackUrl: '/' })} type="button"
             className={`w-full flex items-center justify-center gap-3 border-2 rounded-xl py-2.5 sm:py-3 px-4 transition-colors mb-5 text-sm sm:text-base font-medium ${dm ? 'border-gray-600 text-gray-200 hover:bg-gray-700' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
             <Chrome className="w-4 h-4 sm:w-5 sm:h-5" />Sign up with Google
-          </button>
+          </button> */}
 
-          <div className="relative mb-5">
+          {/* <div className="relative mb-5">
             <div className="absolute inset-0 flex items-center"><div className={`w-full border-t ${dm ? 'border-gray-700' : 'border-gray-200'}`} /></div>
             <div className="relative flex justify-center text-xs sm:text-sm">
               <span className={`px-4 ${dm ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'}`}>Or register with email</span>
             </div>
-          </div>
+          </div> */}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

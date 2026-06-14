@@ -158,7 +158,7 @@ const createContactEmailTemplate = (data: any) => {
 <body>
   <div class="container">
     <div class="header">
-      <h1>🎓 EduElite</h1>
+      <h1>🎓 Intense Learners</h1>
       <div class="badge">New Contact Message</div>
     </div>
 
@@ -220,11 +220,11 @@ const createContactEmailTemplate = (data: any) => {
     </div>
 
     <div class="footer">
-      <p><strong>EduElite Learning Platform</strong></p>
-      <p>Sohna, Haryana, India</p>
+      <p><strong>Intense Learners - Learn With Intensity</strong></p>
+      <p>183A, RZ-A, Near Hanuman Mandir, Adarsh Nagar, Jeewan Park, Delhi 110059</p>
       <p>
-        <a href="mailto:support@eduelite.com">support@eduelite.com</a> | 
-        <a href="tel:+919810493309">+91 98104 93309</a>
+        <a href="mailto:saquibnadeem0@gmail.com">support@IntenseLearners</a> | 
+        <a href="tel:+919118610664">+91 91186 10664</a>
       </p>
       <p style="font-size: 12px; color: #999; margin-top: 15px;">
         This is an automated message from your contact form.
@@ -244,13 +244,13 @@ const createAutoReplyTemplate = (data: any) => {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Thank You for Contacting EduElite</title>
+  <title>Thank You for Contacting Intense Learners</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       line-height: 1.6;
       color: #333;
-      background-color: #f5f5f5;
+      background-color: #cdcdcd;
       margin: 0;
       padding: 0;
     }
@@ -341,7 +341,7 @@ const createAutoReplyTemplate = (data: any) => {
       <div class="greeting">Hi ${data.name},</div>
       
       <div class="message">
-        <p>Thank you for reaching out to <strong>EduElite</strong>! We've successfully received your message and our team is reviewing it.</p>
+        <p>Thank you for reaching out to <strong>Intense Learners</strong>! We've successfully received your message and our team is reviewing it.</p>
         
         <p>We understand that <strong>${data.category}</strong> inquiries are important, and we're committed to providing you with the best support possible.</p>
       </div>
@@ -349,11 +349,11 @@ const createAutoReplyTemplate = (data: any) => {
       <div class="highlight-box">
         <h3>⏱️ Expected Response Time</h3>
         <p>We typically respond within <strong>24 hours</strong> during business days.</p>
-        <p style="margin-top: 10px; font-size: 12px;">Monday - Friday: 9:00 AM - 6:00 PM IST</p>
+        <p style="margin-top: 10px; font-size: 12px;">Monday - Friday: 8:00 AM - 8:00 PM IST</p>
       </div>
 
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" class="cta-button">
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://intense-learners.vercel.app/'}" class="cta-button">
           Visit Our Platform
         </a>
       </div>
@@ -361,18 +361,18 @@ const createAutoReplyTemplate = (data: any) => {
       <div class="message">
         <p style="font-size: 14px; color: #999;">
           <strong>Note:</strong> This is an automated confirmation email. Please do not reply to this email. 
-          If you need immediate assistance, please call us at <a href="tel:+919810493309" style="color: #667eea;">+91 98104 93309</a>.
+          If you need immediate assistance, please call us at <a href="tel:+919118610664" style="color: #667eea;">+91 91186 10664</a>.
         </p>
       </div>
     </div>
 
     <div class="footer">
-      <p><strong>EduElite Learning Platform</strong></p>
+      <p><strong>Intense Learners - Learn With Intensity</strong></p>
       <p style="font-size: 12px; color: #999; margin-top: 20px;">
-        📍 Sohna, Haryana, India<br>
-        📧 support@eduelite.com | ☎️ +91 98104 93309      </p>
+        📍 183A, RZ-A, Near Hanuman Mandir, Adarsh Nagar, Jeewan Park, Delhi 110059<br>
+        📧 support@intenslearners.com | ☎️ +91 91186 10664 </p>
       <p style="font-size: 11px; color: #bbb; margin-top: 20px;">
-        © ${new Date().getFullYear()} EduElite. All rights reserved.
+        © ${new Date().getFullYear()} Intense Learners. All rights reserved.
       </p>
     </div>
   </div>
@@ -443,7 +443,7 @@ export async function POST(req: NextRequest) {
 
     // Send email to admin
     const adminEmail = await resend.emails.send({
-      from: 'EduElite Contact <onboarding@resend.dev>', // Change to your verified domain
+      from: 'Intense Learners Contact <onboarding@resend.dev>', 
       to: ['saquibnadeem0@gmail.com'], // Change to your admin email
       replyTo: email,
       subject: `[${category.toUpperCase()}] ${subject}`,
@@ -452,9 +452,9 @@ export async function POST(req: NextRequest) {
 
     // Send auto-reply to user
     const userEmail = await resend.emails.send({
-      from: 'EduElite Support <onboarding@resend.dev>', // Change to your verified domain
+      from: 'Intense Learners Support <onboarding@resend.dev>', 
       to: [email],
-      subject: `Thank you for contacting EduElite - ${subject}`,
+      subject: `Thank you for contacting Intense Learners - ${name}`,
       html: createAutoReplyTemplate(emailData),
     });
 
