@@ -68,7 +68,7 @@ interface Assignment {
 
 export default function AssignmentManager() {
   const { data: session } = useSession();
-  
+
   // Dark mode detection
   const [dm, setDm] = useState(false);
   useEffect(() => {
@@ -92,7 +92,7 @@ export default function AssignmentManager() {
     try {
       const response = await fetch('/api/teacher/assignments');
       const data = await response.json();
-      
+
       if (data.success) {
         setAssignments(data.assignments || []);
         setFilteredAssignments(data.assignments || []);
@@ -317,7 +317,7 @@ function AssignmentCard({
   const [showSubmissions, setShowSubmissions] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<StudentProfile | null>(null);
-  
+
   const dueDate = new Date(assignment.dueDate);
   const now = new Date();
   const isOverdue = dueDate < now;
@@ -405,7 +405,7 @@ function AssignmentCard({
               <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               {showSubmissions ? 'Hide' : 'View'} Submissions ({assignment.submissions.length})
             </button>
-            
+
             {showSubmissions && (
               <div className={`rounded-lg p-3 sm:p-4 space-y-2 sm:space-y-3 max-h-80 sm:max-h-96 overflow-y-auto ${dm ? 'bg-gray-900' : 'bg-gray-50'}`}>
                 {assignment.submissions.map((submission) => (
@@ -431,7 +431,7 @@ function AssignmentCard({
                         View Profile
                       </button>
                     </div>
-                    
+
                     <div className="flex items-start gap-2 mb-2 min-w-0">
                       <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                       <a
@@ -444,15 +444,15 @@ function AssignmentCard({
                       </a>
                       <span className={`text-[10px] sm:text-xs flex-shrink-0 ${dm ? 'text-gray-500' : 'text-gray-500'}`}>({submission.fileSize})</span>
                     </div>
-                    
+
                     {submission.remarks && (
                       <p className={`text-xs sm:text-sm italic mb-2 ${dm ? 'text-gray-400' : 'text-gray-700'}`}>"{submission.remarks}"</p>
                     )}
-                    
+
                     <div className={`flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2 text-[10px] sm:text-xs ${dm ? 'text-gray-500' : 'text-gray-500'}`}>
                       <span className="truncate">Submitted: {new Date(submission.submittedAt).toLocaleDateString()}</span>
                       <span className={`px-2 py-1 rounded-full font-semibold text-center flex-shrink-0 ${
-                        submission.isCompleted 
+                        submission.isCompleted
                           ? 'bg-green-100 text-green-700'
                           : 'bg-orange-100 text-orange-700'
                       }`}>
@@ -476,7 +476,7 @@ function AssignmentCard({
               <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               {showComments ? 'Hide' : 'View'} Comments ({assignment.comments.length})
             </button>
-            
+
             {showComments && (
               <div className={`rounded-lg p-3 sm:p-4 space-y-2 sm:space-y-3 max-h-60 overflow-y-auto ${dm ? 'bg-gray-900' : 'bg-gray-50'}`}>
                 {assignment.comments.map((comment) => (
@@ -547,7 +547,7 @@ function AssignmentCard({
 
 function StudentProfileModal({ student, onClose, darkMode }: { student: StudentProfile; onClose: () => void; darkMode: boolean }) {
   const dm = darkMode;
-  
+
   const calculateAge = (dob: string | null) => {
     if (!dob) return null;
     const today = new Date();
@@ -633,7 +633,7 @@ function StudentProfileModal({ student, onClose, darkMode }: { student: StudentP
 
 function CreateAssignmentModal({ onClose, onSuccess, darkMode }: { onClose: () => void; onSuccess: () => void; darkMode: boolean }) {
   const dm = darkMode;
-  
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -752,9 +752,22 @@ function CreateAssignmentModal({ onClose, onSuccess, darkMode }: { onClose: () =
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-      <div className={`rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden ${dm ? 'bg-gray-800' : 'bg-white'}`}>
-        <div className={`p-4 sm:p-6 border-b ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+    // Fixed: items-center on all breakpoints + p-4 everywhere so the modal
+    // is always centered with breathing room around it (previously
+    // items-end on mobile + p-0 caused inconsistent sizing/positioning).
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      {/*
+        Fixed: the modal is now a flex column with a capped height
+        (max-h-[90vh]). The header and footer are normal flex items,
+        and the form body uses flex-1 + overflow-y-auto, so the footer
+        (with the "Create Assignment" button) is ALWAYS visible at the
+        bottom of the modal, regardless of screen size or how many
+        fields are shown. Previously the footer could be pushed outside
+        the overflow-hidden container on larger (laptop) viewports.
+      */}
+      <div className={`rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden ${dm ? 'bg-gray-800' : 'bg-white'}`}>
+        {/* Header (fixed) */}
+        <div className={`p-4 sm:p-6 border-b flex-shrink-0 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
           <div className="flex items-center justify-between">
             <h3 className={`text-xl sm:text-2xl font-bold ${dm ? 'text-gray-100' : 'text-gray-900'}`}>Create New Assignment</h3>
             <button onClick={onClose} className={`p-2 rounded-lg transition ${dm ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}>
@@ -763,8 +776,11 @@ function CreateAssignmentModal({ onClose, onSuccess, darkMode }: { onClose: () =
           </div>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="overflow-y-auto max-h-[calc(95vh-180px)] sm:max-h-[calc(90vh-180px)] p-4 sm:p-6 space-y-4 sm:space-y-6">
+        {/* Form: flex-1 so it fills remaining height; flex-col so the
+            scrollable body and the fixed footer stack correctly */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          {/* Scrollable body */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
             <div>
               <label className={`block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Assignment Title *</label>
               <input
@@ -886,7 +902,8 @@ function CreateAssignmentModal({ onClose, onSuccess, darkMode }: { onClose: () =
             </div>
           </div>
 
-          <div className={`p-4 sm:p-6 border-t flex flex-col xs:flex-row items-stretch xs:items-center justify-end gap-2 sm:gap-3 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+          {/* Footer (fixed, always visible) */}
+          <div className={`p-4 sm:p-6 border-t flex-shrink-0 flex flex-col xs:flex-row items-stretch xs:items-center justify-end gap-2 sm:gap-3 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
             <button
               type="button"
               onClick={onClose}
