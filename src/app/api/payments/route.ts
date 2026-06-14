@@ -87,6 +87,7 @@ async function sendEmailViaBrevo(
   }
 }
 
+
 // Helper function to send order notification
 async function sendOrderNotification(
   to: string,
