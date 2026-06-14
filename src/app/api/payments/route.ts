@@ -67,11 +67,11 @@ async function sendEmailViaBrevo(
     body: JSON.stringify({
       sender: {
         name: "Intense Learners",
-        email: process.env.EMAIL_FROM || "saquibnadeem0@gmail.com",
+        email: process.env.BREVO_SENDER_EMAIL || "saquibnadeem0@gmail.com",
       },
       to: [{ email: to, name: toName }],
       replyTo: {
-        email: process.env.EMAIL_FROM || "saquibnadeem0@gmail.com",
+        email: process.env.BREVO_SENDER_EMAIL || "saquibnadeem0@gmail.com",
         name: "Intense Learners",
       },
       subject,
