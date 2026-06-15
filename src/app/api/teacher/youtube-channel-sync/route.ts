@@ -1,15 +1,4 @@
 // app/api/teacher/youtube-channel-sync/route.ts
-//
-// Instead of dumping everything into one "channel" folder, this now syncs
-// EVERY PUBLIC PLAYLIST on the channel (plus a virtual "All Videos" playlist
-// that represents the channel's uploads) into its own VideoFolder.
-//
-// GET  -> channel info + list of playlists (with sync status for each)
-// POST -> body { playlistId?: string }
-//         - with playlistId: sync just that one playlist into its folder
-//         - without playlistId: sync ALL playlists (one folder each)
-//
-// Requires env vars: YOUTUBE_API_KEY, YOUTUBE_CHANNEL_ID
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -32,7 +21,10 @@ async function ytFetch(endpoint: string, params: Record<string, string>) {
   const url = new URL(`${YT_BASE}/${endpoint}`);
   Object.entries({ ...params, key: YT_KEY }).forEach(([k, v]) => url.searchParams.set(k, v));
   const res = await fetch(url.toString(), { cache: 'no-store' });
-  if (!res.ok) throw new Error(`YouTube API ${endpoint} → ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`YouTube API ${endpoint} → ${res.status}: ${errorText}`);
+  }
   return res.json();
 }
 
@@ -49,7 +41,6 @@ async function getChannelInfo(channelId: string) {
   };
 }
 
-// All custom playlists owned by the channel (public ones, since we use an API key)
 async function fetchAllPlaylists(channelId: string) {
   const results: { id: string; title: string; description: string; thumbnail: string; itemCount: number }[] = [];
   let pageToken: string | undefined;
@@ -77,37 +68,54 @@ async function fetchAllPlaylists(channelId: string) {
   return results;
 }
 
-// All videos in any playlist (works for custom playlists AND the uploads playlist)
 async function fetchAllVideos(playlistId: string) {
   const results: any[] = [];
   let pageToken: string | undefined;
-  do {
-    const params: Record<string, string> = { part: 'snippet,contentDetails,status', maxResults: '50', playlistId };
-    if (pageToken) params.pageToken = pageToken;
-    const data = await ytFetch('playlistItems', params);
-    for (const item of data.items ?? []) {
-      const videoId: string = item.contentDetails?.videoId;
-      if (!videoId) continue;
-      if (item.status?.privacyStatus === 'private') continue;
-      const title: string = item.snippet?.title ?? '';
-      if (title === 'Deleted video' || title === 'Private video') continue;
-      const snip = item.snippet ?? {};
-      results.push({
-        videoId,
-        title,
-        description: snip.description ?? '',
-        thumbnail:
-          snip.thumbnails?.maxres?.url ??
-          snip.thumbnails?.standard?.url ??
-          snip.thumbnails?.high?.url ??
-          snip.thumbnails?.medium?.url ??
-          `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-        publishedAt: item.contentDetails?.videoPublishedAt ?? snip.publishedAt ?? new Date().toISOString(),
-        position: snip.position ?? 0,
-      });
+  
+  try {
+    do {
+      const params: Record<string, string> = { 
+        part: 'snippet,contentDetails,status', 
+        maxResults: '50', 
+        playlistId 
+      };
+      if (pageToken) params.pageToken = pageToken;
+      const data = await ytFetch('playlistItems', params);
+      
+      for (const item of data.items ?? []) {
+        const videoId: string = item.contentDetails?.videoId;
+        if (!videoId) continue;
+        if (item.status?.privacyStatus === 'private') continue;
+        const title: string = item.snippet?.title ?? '';
+        if (title === 'Deleted video' || title === 'Private video') continue;
+        const snip = item.snippet ?? {};
+        results.push({
+          videoId,
+          title,
+          description: snip.description ?? '',
+          thumbnail:
+            snip.thumbnails?.maxres?.url ??
+            snip.thumbnails?.standard?.url ??
+            snip.thumbnails?.high?.url ??
+            snip.thumbnails?.medium?.url ??
+            `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+          publishedAt: item.contentDetails?.videoPublishedAt ?? snip.publishedAt ?? new Date().toISOString(),
+          position: snip.position ?? 0,
+        });
+      }
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+  } catch (error: any) {
+    // Handle 404 playlist not found errors gracefully
+    if (error.message?.includes('404') || 
+        error.message?.includes('playlistNotFound') ||
+        error.message?.includes('playlistId')) {
+      console.warn(`Playlist ${playlistId} not found or not accessible. Skipping.`);
+      return [];
     }
-    pageToken = data.nextPageToken;
-  } while (pageToken);
+    throw error;
+  }
+  
   return results;
 }
 
@@ -125,9 +133,20 @@ async function fetchVideoDetails(videoIds: string[]) {
   return { durMap, viewMap };
 }
 
-// Sync one YouTube playlist's videos into one VideoFolder
 async function syncPlaylistVideos(folderId: string, playlistId: string) {
-  const videos = await fetchAllVideos(playlistId);
+  let videos;
+  try {
+    videos = await fetchAllVideos(playlistId);
+  } catch (error: any) {
+    console.error(`Failed to fetch videos for playlist ${playlistId}:`, error.message);
+    // If playlist is inaccessible, delete the folder and rethrow
+    if (error.message?.includes('404') || error.message?.includes('playlistNotFound')) {
+      await prisma.videoFolder.delete({ where: { id: folderId } }).catch(() => {});
+      throw new Error(`Playlist not accessible. It might be private or deleted.`);
+    }
+    throw error;
+  }
+  
   if (videos.length === 0) {
     // Still clean up any stale videos if the playlist is now empty
     const { count: removed } = await prisma.video.deleteMany({ where: { folderId } });
@@ -165,23 +184,32 @@ async function syncPlaylistVideos(folderId: string, playlistId: string) {
   return { total: videos.length, created, updated, removed };
 }
 
-// Build the combined list: "All Videos" (uploads) first, then custom playlists
 async function getChannelPlaylists() {
   const info = await getChannelInfo(YT_CHANNEL_ID);
   const customPlaylists = await fetchAllPlaylists(YT_CHANNEL_ID);
 
-  const allVideosEntry = {
-    id: info.uploadsPlaylistId,
-    title: 'All Videos',
-    description: `Every public video uploaded to ${info.title}`,
-    thumbnail: info.thumbnail,
-    itemCount: parseInt(info.videoCount, 10) || 0,
-    isUploads: true,
-  };
+  // Only add the "All Videos" playlist if we can access it
+  let allVideosEntry = null;
+  try {
+    // Test if we can access the uploads playlist
+    await fetchAllVideos(info.uploadsPlaylistId);
+    allVideosEntry = {
+      id: info.uploadsPlaylistId,
+      title: 'All Videos',
+      description: `Every public video uploaded to ${info.title}`,
+      thumbnail: info.thumbnail,
+      itemCount: parseInt(info.videoCount, 10) || 0,
+      isUploads: true,
+    };
+  } catch (error: any) {
+    console.warn(`Cannot access uploads playlist ${info.uploadsPlaylistId}. Skipping "All Videos" folder.`);
+  }
 
   return {
     info,
-    playlists: [allVideosEntry, ...customPlaylists.map(p => ({ ...p, isUploads: false }))],
+    playlists: allVideosEntry 
+      ? [allVideosEntry, ...customPlaylists.map(p => ({ ...p, isUploads: false }))]
+      : customPlaylists.map(p => ({ ...p, isUploads: false })),
   };
 }
 
@@ -219,12 +247,13 @@ export async function GET(req: NextRequest) {
           description: p.description,
           thumbnail: p.thumbnail,
           itemCount: p.itemCount,
-          isUploads: p.isUploads,
+          isUploads: p.isUploads || false,
           folder: f ? { id: f.id, name: f.name, videoCount: f._count.videos, isPublic: f.isPublic } : null,
         };
       }),
     });
   } catch (err: any) {
+    console.error('GET error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -252,40 +281,64 @@ export async function POST(req: NextRequest) {
     }
 
     const results = [];
+    const errors = [];
+
     for (const p of toSync) {
-      let folder = await prisma.videoFolder.findFirst({
-        where: { teacherId: teacher.id, youtubePlaylistId: p.id },
-      });
-
-      if (!folder) {
-        folder = await prisma.videoFolder.create({
-          data: {
-            teacherId: teacher.id,
-            name: p.title,
-            subject: 'All Subjects',
-            class: 'All Classes',
-            chapter: p.isUploads ? 'YouTube Channel' : 'YouTube Playlist',
-            description: p.description || `Synced from YouTube playlist "${p.title}"`,
-            thumbnail: p.thumbnail || '',
-            isPublic: true,
-            youtubePlaylistId: p.id,
-          },
+      try {
+        let folder = await prisma.videoFolder.findFirst({
+          where: { teacherId: teacher.id, youtubePlaylistId: p.id },
         });
-      } else if (p.thumbnail && !folder.thumbnail) {
-        await prisma.videoFolder.update({ where: { id: folder.id }, data: { thumbnail: p.thumbnail } });
-      }
 
-      const stats = await syncPlaylistVideos(folder.id, p.id);
-      results.push({
-        playlistId: p.id,
-        playlistTitle: p.title,
-        folderId: folder.id,
-        folderName: folder.name,
-        ...stats,
-      });
+        if (!folder) {
+          folder = await prisma.videoFolder.create({
+            data: {
+              teacherId: teacher.id,
+              name: p.title,
+              subject: 'All Subjects',
+              class: 'All Classes',
+              chapter: p.isUploads ? 'YouTube Channel' : 'YouTube Playlist',
+              description: p.description || `Synced from YouTube playlist "${p.title}"`,
+              thumbnail: p.thumbnail || '',
+              isPublic: true,
+              youtubePlaylistId: p.id,
+            },
+          });
+        } else if (p.thumbnail && !folder.thumbnail) {
+          await prisma.videoFolder.update({ where: { id: folder.id }, data: { thumbnail: p.thumbnail } });
+        }
+
+        const stats = await syncPlaylistVideos(folder.id, p.id);
+        results.push({
+          playlistId: p.id,
+          playlistTitle: p.title,
+          folderId: folder.id,
+          folderName: folder.name,
+          ...stats,
+        });
+      } catch (error: any) {
+        console.error(`Failed to sync playlist ${p.title} (${p.id}):`, error.message);
+        errors.push({
+          playlistId: p.id,
+          playlistTitle: p.title,
+          error: error.message,
+        });
+      }
     }
 
-    return NextResponse.json({ success: true, synced: results.length, results });
+    if (results.length === 0 && errors.length > 0) {
+      return NextResponse.json({ 
+        error: 'Failed to sync any playlists', 
+        errors 
+      }, { status: 500 });
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      synced: results.length, 
+      failed: errors.length,
+      results,
+      errors: errors.length > 0 ? errors : undefined
+    });
   } catch (err: any) {
     console.error('YT sync error:', err);
     return NextResponse.json({ error: err.message ?? 'Sync failed' }, { status: 500 });
