@@ -1,56 +1,35 @@
 // app/api/student/watch-stats/route.ts
-// ✅ UPDATED: Calculates actual watch time from watchedSeconds field
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 
-// GET - Get student's watch statistics
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Get all progress records for this user
-    const progressRecords = await prisma.videoProgress.findMany({
-      where: {
-        userId: session.user.id
-      },
-      select: {
-        watchedSeconds: true,
-        completed: true
-      }
+    const records = await prisma.videoProgress.findMany({
+      where: { userId: session.user.id },
+      select: { watchedSeconds: true, completed: true, bookmarked: true },
     });
 
-    // ✅ Calculate total watch time from actual watchedSeconds field
-    const totalWatchSeconds = progressRecords.reduce((sum, progress) => {
-      return sum + (progress.watchedSeconds || 0);
-    }, 0);
-
-    const watchTimeHours = Math.floor(totalWatchSeconds / 3600);
-    const watchTimeMinutes = Math.floor((totalWatchSeconds % 3600) / 60);
-
-    // Count completed videos
-    const completedVideos = progressRecords.filter(p => p.completed).length;
-    const totalStartedVideos = progressRecords.length;
+    const totalSecs = records.reduce((s, r) => s + (r.watchedSeconds ?? 0), 0);
+    const completed = records.filter(r => r.completed).length;
+    const bookmarked = records.filter(r => r.bookmarked).length;
 
     return NextResponse.json({
       watchTime: {
-        hours: watchTimeHours,
-        minutes: watchTimeMinutes,
-        totalSeconds: totalWatchSeconds
+        hours: Math.floor(totalSecs / 3600),
+        minutes: Math.floor((totalSecs % 3600) / 60),
+        totalSeconds: totalSecs,
       },
-      completedVideos,
-      totalStartedVideos,
-      completionRate: totalStartedVideos > 0 
-        ? Math.round((completedVideos / totalStartedVideos) * 100) 
-        : 0
+      completedVideos: completed,
+      startedVideos: records.length,
+      bookmarkedVideos: bookmarked,
+      completionRate: records.length > 0 ? Math.round((completed / records.length) * 100) : 0,
     });
-  } catch (error) {
-    console.error('Error fetching watch stats:', error);
+  } catch (err: any) {
     return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
   }
 }

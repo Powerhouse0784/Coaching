@@ -325,7 +325,7 @@ model VideoFolder {
   isPublic    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
+  youtubePlaylistId String?
   teacherId String
   teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
@@ -345,7 +345,7 @@ model Video {
   quality     String   @default("1080p")
   views       Int      @default(0)
   uploadDate  DateTime @default(now())
-
+  order Int @default(0)
   folderId String
   folder   VideoFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
 

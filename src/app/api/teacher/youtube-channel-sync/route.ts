@@ -1,7 +1,13 @@
 // app/api/teacher/youtube-channel-sync/route.ts
-// Syncs ALL public uploads from your YouTube channel (YOUTUBE_CHANNEL_ID) into
-// a single auto-managed VideoFolder for that teacher. This is the "import
-// everything from my channel" button.
+//
+// Instead of dumping everything into one "channel" folder, this now syncs
+// EVERY PUBLIC PLAYLIST on the channel (plus a virtual "All Videos" playlist
+// that represents the channel's uploads) into its own VideoFolder.
+//
+// GET  -> channel info + list of playlists (with sync status for each)
+// POST -> body { playlistId?: string }
+//         - with playlistId: sync just that one playlist into its folder
+//         - without playlistId: sync ALL playlists (one folder each)
 //
 // Requires env vars: YOUTUBE_API_KEY, YOUTUBE_CHANNEL_ID
 
@@ -43,11 +49,40 @@ async function getChannelInfo(channelId: string) {
   };
 }
 
-async function fetchAllVideos(uploadsPlaylistId: string) {
+// All custom playlists owned by the channel (public ones, since we use an API key)
+async function fetchAllPlaylists(channelId: string) {
+  const results: { id: string; title: string; description: string; thumbnail: string; itemCount: number }[] = [];
+  let pageToken: string | undefined;
+  do {
+    const params: Record<string, string> = { part: 'snippet,contentDetails', maxResults: '50', channelId };
+    if (pageToken) params.pageToken = pageToken;
+    const data = await ytFetch('playlists', params);
+    for (const item of data.items ?? []) {
+      const snip = item.snippet ?? {};
+      results.push({
+        id: item.id,
+        title: snip.title ?? 'Untitled Playlist',
+        description: snip.description ?? '',
+        thumbnail:
+          snip.thumbnails?.maxres?.url ??
+          snip.thumbnails?.standard?.url ??
+          snip.thumbnails?.high?.url ??
+          snip.thumbnails?.medium?.url ??
+          '',
+        itemCount: item.contentDetails?.itemCount ?? 0,
+      });
+    }
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return results;
+}
+
+// All videos in any playlist (works for custom playlists AND the uploads playlist)
+async function fetchAllVideos(playlistId: string) {
   const results: any[] = [];
   let pageToken: string | undefined;
   do {
-    const params: Record<string, string> = { part: 'snippet,contentDetails,status', maxResults: '50', playlistId: uploadsPlaylistId };
+    const params: Record<string, string> = { part: 'snippet,contentDetails,status', maxResults: '50', playlistId };
     if (pageToken) params.pageToken = pageToken;
     const data = await ytFetch('playlistItems', params);
     for (const item of data.items ?? []) {
@@ -90,9 +125,14 @@ async function fetchVideoDetails(videoIds: string[]) {
   return { durMap, viewMap };
 }
 
-async function syncChannel(folderId: string, uploadsPlaylistId: string) {
-  const videos = await fetchAllVideos(uploadsPlaylistId);
-  if (videos.length === 0) return { total: 0, created: 0, updated: 0, removed: 0 };
+// Sync one YouTube playlist's videos into one VideoFolder
+async function syncPlaylistVideos(folderId: string, playlistId: string) {
+  const videos = await fetchAllVideos(playlistId);
+  if (videos.length === 0) {
+    // Still clean up any stale videos if the playlist is now empty
+    const { count: removed } = await prisma.video.deleteMany({ where: { folderId } });
+    return { total: 0, created: 0, updated: 0, removed };
+  }
 
   const { durMap, viewMap } = await fetchVideoDetails(videos.map(v => v.videoId));
   let created = 0, updated = 0;
@@ -117,7 +157,6 @@ async function syncChannel(folderId: string, uploadsPlaylistId: string) {
     }
   }
 
-  // Remove videos that no longer exist in the channel's uploads
   const liveIds = videos.map(v => v.videoId);
   const { count: removed } = await prisma.video.deleteMany({
     where: { folderId, videoUrl: { notIn: liveIds } },
@@ -126,58 +165,71 @@ async function syncChannel(folderId: string, uploadsPlaylistId: string) {
   return { total: videos.length, created, updated, removed };
 }
 
-// GET — status info for the dashboard widget
+// Build the combined list: "All Videos" (uploads) first, then custom playlists
+async function getChannelPlaylists() {
+  const info = await getChannelInfo(YT_CHANNEL_ID);
+  const customPlaylists = await fetchAllPlaylists(YT_CHANNEL_ID);
+
+  const allVideosEntry = {
+    id: info.uploadsPlaylistId,
+    title: 'All Videos',
+    description: `Every public video uploaded to ${info.title}`,
+    thumbnail: info.thumbnail,
+    itemCount: parseInt(info.videoCount, 10) || 0,
+    isUploads: true,
+  };
+
+  return {
+    info,
+    playlists: [allVideosEntry, ...customPlaylists.map(p => ({ ...p, isUploads: false }))],
+  };
+}
+
+// GET — channel info + every playlist with its sync status
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if ((session.user as any).role !== 'TEACHER') return NextResponse.json({ error: 'Teachers only' }, { status: 403 });
+    if (!YT_KEY) return NextResponse.json({ error: 'YOUTUBE_API_KEY not set in .env' }, { status: 500 });
     if (!YT_CHANNEL_ID) return NextResponse.json({ error: 'YOUTUBE_CHANNEL_ID not set in .env' }, { status: 500 });
 
     const teacher = await prisma.teacher.findUnique({ where: { userId: session.user.id } });
     if (!teacher) return NextResponse.json({ error: 'Teacher not found' }, { status: 404 });
 
-    const folder = await prisma.videoFolder.findFirst({
-      where: { teacherId: teacher.id, youtubePlaylistId: { not: null } },
-      include: {
-        videos: {
-          orderBy: { uploadDate: 'desc' },
-          take: 3,
-          select: { id: true, title: true, thumbnail: true, videoUrl: true, duration: true },
-        },
-        _count: { select: { videos: true } },
-      },
-    });
+    const { info, playlists } = await getChannelPlaylists();
 
-    let channelSnippet = { title: 'Your Channel', thumbnail: '', subscriberCount: '0', videoCount: '0' };
-    try {
-      const info = await getChannelInfo(YT_CHANNEL_ID);
-      channelSnippet = { title: info.title, thumbnail: info.thumbnail, subscriberCount: info.subscriberCount, videoCount: info.videoCount };
-    } catch {
-      /* non-critical — UI still works without live channel snippet */
-    }
+    const folders = await prisma.videoFolder.findMany({
+      where: { teacherId: teacher.id, youtubePlaylistId: { in: playlists.map(p => p.id) } },
+      include: { _count: { select: { videos: true } } },
+    });
+    const folderMap = new Map(folders.map(f => [f.youtubePlaylistId as string, f]));
 
     return NextResponse.json({
       channelId: YT_CHANNEL_ID,
-      channelTitle: channelSnippet.title,
-      channelThumbnail: channelSnippet.thumbnail,
-      subscriberCount: channelSnippet.subscriberCount,
-      videoCount: channelSnippet.videoCount,
-      folder: folder
-        ? {
-            id: folder.id,
-            name: folder.name,
-            videoCount: folder._count.videos, // ← mapped to a plain number for the client
-            videos: folder.videos,
-          }
-        : null,
+      channelTitle: info.title,
+      channelThumbnail: info.thumbnail,
+      subscriberCount: info.subscriberCount,
+      videoCount: info.videoCount,
+      playlists: playlists.map(p => {
+        const f = folderMap.get(p.id);
+        return {
+          playlistId: p.id,
+          title: p.title,
+          description: p.description,
+          thumbnail: p.thumbnail,
+          itemCount: p.itemCount,
+          isUploads: p.isUploads,
+          folder: f ? { id: f.id, name: f.name, videoCount: f._count.videos, isPublic: f.isPublic } : null,
+        };
+      }),
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-// POST — run the sync
+// POST — sync one playlist (body.playlistId) or ALL playlists (no body / empty body)
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -189,32 +241,51 @@ export async function POST(req: NextRequest) {
     const teacher = await prisma.teacher.findUnique({ where: { userId: session.user.id } });
     if (!teacher) return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 });
 
-    const { title: channelTitle, uploadsPlaylistId, thumbnail: channelThumb } = await getChannelInfo(YT_CHANNEL_ID);
+    const body = await req.json().catch(() => ({} as any));
+    const targetPlaylistId: string | undefined = body?.playlistId;
 
-    let folder = await prisma.videoFolder.findFirst({
-      where: { teacherId: teacher.id, youtubePlaylistId: uploadsPlaylistId },
-    });
+    const { playlists } = await getChannelPlaylists();
 
-    if (!folder) {
-      folder = await prisma.videoFolder.create({
-        data: {
-          teacherId: teacher.id,
-          name: `${channelTitle} — Video Lectures`,
-          subject: 'All Subjects',
-          class: 'All Classes',
-          chapter: 'YouTube Channel',
-          description: `All video lectures from the YouTube channel "${channelTitle}"`,
-          thumbnail: channelThumb,
-          isPublic: true,
-          youtubePlaylistId: uploadsPlaylistId,
-        },
-      });
-    } else if (channelThumb && !folder.thumbnail) {
-      await prisma.videoFolder.update({ where: { id: folder.id }, data: { thumbnail: channelThumb } });
+    const toSync = targetPlaylistId ? playlists.filter(p => p.id === targetPlaylistId) : playlists;
+    if (toSync.length === 0) {
+      return NextResponse.json({ error: 'That playlist was not found on this channel' }, { status: 404 });
     }
 
-    const stats = await syncChannel(folder.id, uploadsPlaylistId);
-    return NextResponse.json({ success: true, channelTitle, folderId: folder.id, ...stats });
+    const results = [];
+    for (const p of toSync) {
+      let folder = await prisma.videoFolder.findFirst({
+        where: { teacherId: teacher.id, youtubePlaylistId: p.id },
+      });
+
+      if (!folder) {
+        folder = await prisma.videoFolder.create({
+          data: {
+            teacherId: teacher.id,
+            name: p.title,
+            subject: 'All Subjects',
+            class: 'All Classes',
+            chapter: p.isUploads ? 'YouTube Channel' : 'YouTube Playlist',
+            description: p.description || `Synced from YouTube playlist "${p.title}"`,
+            thumbnail: p.thumbnail || '',
+            isPublic: true,
+            youtubePlaylistId: p.id,
+          },
+        });
+      } else if (p.thumbnail && !folder.thumbnail) {
+        await prisma.videoFolder.update({ where: { id: folder.id }, data: { thumbnail: p.thumbnail } });
+      }
+
+      const stats = await syncPlaylistVideos(folder.id, p.id);
+      results.push({
+        playlistId: p.id,
+        playlistTitle: p.title,
+        folderId: folder.id,
+        folderName: folder.name,
+        ...stats,
+      });
+    }
+
+    return NextResponse.json({ success: true, synced: results.length, results });
   } catch (err: any) {
     console.error('YT sync error:', err);
     return NextResponse.json({ error: err.message ?? 'Sync failed' }, { status: 500 });
