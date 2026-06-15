@@ -56,7 +56,7 @@ const socialLinks: Record<string, string> = {
   facebook:  'https://www.facebook.com/share/1E77DTHG5w/',
   Chrome:    'https://maps.app.goo.gl/ByExkEywvFAxG84c9?g_st=aw',
   Instagram:  'https://www.instagram.com/intense_learners?igsh=MTVtNTV2Znd6cGVrZQ==',
-  youtube:   'https://youtube.com/@intenselearners?si=Yq48WR0-3XJ3FBEz',
+  youtube:   'https://youtube.com/@intense_learners?si=PKpm1w_PnuAImiYG',
 
 };
 
