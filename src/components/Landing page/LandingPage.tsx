@@ -880,7 +880,7 @@ const ProtectedLanding = () => {
                 Join 100+ students achieving their dreams with personalized AI study plans, live expert classes, and 24/7 intelligent support.
               </p>
               <div className="flex flex-col xs:flex-row gap-3 sm:gap-4 mb-6 sm:mb-10 justify-center lg:justify-start">
-                <button onClick={() => session ? openFeature('study-planner') : setAuthScreen('register')}
+                <button onClick={() => session ? setShowEditProfile(true) : setAuthScreen('register')}
                   className="group bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-sm sm:text-base lg:text-lg hover:shadow-2xl hover:scale-105 transition-all flex items-center justify-center gap-2">
                   {session ? 'Go to Dashboard' : 'Start Learning Free'}
                   <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
@@ -1109,7 +1109,7 @@ const ProtectedLanding = () => {
             Join 100+ students already learning with Intense Learners. Start your free trial today.
           </p>
           <div className="flex flex-col xs:flex-row gap-3 sm:gap-4 justify-center px-4">
-            <button onClick={() => session ? openFeature('study-planner') : setAuthScreen('register')}
+            <button onClick={() => session ? setShowEditProfile(true) : setAuthScreen('register')}
               className="group bg-white text-purple-900 px-6 sm:px-8 lg:px-10 py-3.5 sm:py-4 lg:py-5 rounded-xl font-bold text-base sm:text-lg lg:text-xl hover:shadow-2xl hover:scale-105 transition-all inline-flex items-center justify-center gap-2 sm:gap-3">
               {session ? 'Go to Your Dashboard' : 'Start Free Trial Now'}
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 group-hover:translate-x-1 transition-transform" />
@@ -1155,8 +1155,19 @@ const ProtectedLanding = () => {
                 { label: 'AI Study Planner', id: 'study-planner'},
                 { label: 'Mock Tests',       id: 'quizzes'      },
               ]},
-              { title: 'Resources', links: ['Blog', 'Help Center', 'Community', 'Contact Us'] },
-              { title: 'Legal',     links: ['Privacy Policy', 'Terms of Service', 'Cookie Policy', 'Refund Policy'] },
+              { title: 'Resources', links: [
+                { label: 'YouTube Channel', href: 'https://youtube.com/@intense_learners?si=PKpm1w_PnuAImiYG', external: true },
+                { label: 'Instagram',       href: 'https://www.instagram.com/intense_learners?igsh=MTVtNTV2Znd6cGVrZQ==', external: true },
+                { label: 'Facebook',        href: 'https://www.facebook.com/share/1E77DTHG5w/', external: true },
+                { label: 'Visit Us',        href: 'https://maps.app.goo.gl/ByExkEywvFAxG84c9?g_st=aw', external: true },
+                { label: 'Contact Us',      href: '/contact', external: false },
+              ]},
+              { title: 'Legal', links: [
+                { label: 'Privacy Policy',    href: '/privacy-policy',   external: false },
+                { label: 'Terms of Service',  href: '/terms-of-service', external: false },
+                { label: 'Cookie Policy',     href: '/cookie-policy',    external: false },
+                { label: 'Refund Policy',     href: '/refund-policy',    external: false },
+              ]},
             ].map((col) => (
               <div key={col.title}>
                 <h4 className="font-bold text-sm sm:text-base lg:text-lg mb-3 sm:mb-4">{col.title}</h4>
@@ -1165,8 +1176,12 @@ const ProtectedLanding = () => {
                     ? (col as any).items.map((item: any) => (
                         <li key={item.label}><button onClick={() => openFeature(item.id)} className="hover:text-white transition-colors">{item.label}</button></li>
                       ))
-                    : (col as any).links?.map((l: string) => (
-                        <li key={l}><a href="#" className="hover:text-white transition-colors">{l}</a></li>
+                    : (col as any).links?.map((l: any) => (
+                        <li key={l.label}>
+                          {l.external
+                            ? <a href={l.href} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">{l.label}</a>
+                            : <a href={l.href} className="hover:text-white transition-colors">{l.label}</a>}
+                        </li>
                       ))}
                 </ul>
               </div>
