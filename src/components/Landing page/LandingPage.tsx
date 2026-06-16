@@ -2,7 +2,7 @@
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import { 
   Brain, Trophy, Users, Video, Target, Menu, X, 
@@ -48,25 +48,24 @@ function CoachingLogo({ className = "w-full h-full" }: { className?: string }) {
 // ─── Social icons map ──────────────────────────────────────────────────────────
 const socialIcons: Record<string, React.ReactNode> = {
   facebook:  <Facebook className="w-4 h-4" />,
-  Chrome: <Chrome className="w-4 h-4" />,
-  Instagram:  <Instagram  className="w-4 h-4" />,
-  youtube:   <Youtube   className="w-4 h-4" />,
+  Chrome:    <Chrome   className="w-4 h-4" />,
+  Instagram: <Instagram className="w-4 h-4" />,
+  youtube:   <Youtube  className="w-4 h-4" />,
 };
 const socialLinks: Record<string, string> = {
   facebook:  'https://www.facebook.com/share/1E77DTHG5w/',
   Chrome:    'https://maps.app.goo.gl/ByExkEywvFAxG84c9?g_st=aw',
-  Instagram:  'https://www.instagram.com/intense_learners?igsh=MTVtNTV2Znd6cGVrZQ==',
+  Instagram: 'https://www.instagram.com/intense_learners?igsh=MTVtNTV2Znd6cGVrZQ==',
   youtube:   'https://youtube.com/@intense_learners?si=PKpm1w_PnuAImiYG',
-
 };
 
 // ─── Forgot Password Page ──────────────────────────────────────────────────────
 const ForgotPasswordPage: React.FC<{ onBack: () => void; darkMode: boolean }> = ({ onBack, darkMode }) => {
   const dm = darkMode;
-  const [step, setStep]         = useState<'email' | 'sent'>('email');
-  const [email, setEmail]       = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
+  const [step, setStep]       = useState<'email' | 'sent'>('email');
+  const [email, setEmail]     = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,8 +148,7 @@ const ForgotPasswordPage: React.FC<{ onBack: () => void; darkMode: boolean }> = 
               <p className={`text-xs sm:text-sm leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
                 Click the link in the email to reset your password. If you don't see it, check your spam folder.
               </p>
-              <button
-                onClick={() => setStep('email')}
+              <button onClick={() => setStep('email')}
                 className={`text-xs sm:text-sm font-semibold transition-colors ${dm ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'}`}>
                 Didn't receive it? Try again
               </button>
@@ -172,13 +170,13 @@ const ForgotPasswordPage: React.FC<{ onBack: () => void; darkMode: boolean }> = 
 // ─── Login Page ────────────────────────────────────────────────────────────────
 const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void; darkMode: boolean }> = ({ onSwitchToRegister, onBack, darkMode }) => {
   const dm = darkMode;
-  const [email, setEmail]           = useState('');
-  const [password, setPassword]     = useState('');
-  const [role, setRole]             = useState<'STUDENT' | 'TEACHER'>('STUDENT');
+  const [email, setEmail]               = useState('');
+  const [password, setPassword]         = useState('');
+  const [role, setRole]                 = useState<'STUDENT' | 'TEACHER'>('STUDENT');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState('');
-  const [showForgot, setShowForgot] = useState(false);
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState('');
+  const [showForgot, setShowForgot]     = useState(false);
 
   if (showForgot) return <ForgotPasswordPage onBack={() => setShowForgot(false)} darkMode={dm} />;
 
@@ -214,9 +212,7 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void;
 
         <div className={`rounded-2xl shadow-xl p-6 sm:p-8 border-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
           <div className="text-center mb-6 sm:mb-8">
-            <div className="w-13 h-13 sm:w-16 sm:h-16 mx-auto mb-4 flex items-center justify-center">
-              <CoachingLogo />
-            </div>
+            <div className="w-13 h-13 sm:w-16 sm:h-16 mx-auto mb-4 flex items-center justify-center"><CoachingLogo /></div>
             <h1 className={`text-xl sm:text-2xl font-bold ${dm ? 'text-white' : 'text-gray-900'}`}>Welcome Back</h1>
             <p className={`mt-1.5 text-xs sm:text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>Sign in to continue learning</p>
           </div>
@@ -227,18 +223,6 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void;
               <p className="text-xs sm:text-sm">{error}</p>
             </div>
           )}
-
-          {/* <button onClick={() => signIn('google', { callbackUrl: '/' })} type="button"
-            className={`w-full flex items-center justify-center gap-3 border-2 rounded-xl py-2.5 sm:py-3 px-4 transition-colors mb-5 sm:mb-6 text-sm sm:text-base font-medium ${dm ? 'border-gray-600 text-gray-200 hover:bg-gray-700' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
-            <Chrome className="w-4 h-4 sm:w-5 sm:h-5" />Continue with Google
-          </button>
-
-          <div className="relative mb-5 sm:mb-6">
-            <div className="absolute inset-0 flex items-center"><div className={`w-full border-t ${dm ? 'border-gray-700' : 'border-gray-200'}`} /></div>
-            <div className="relative flex justify-center text-xs sm:text-sm">
-              <span className={`px-4 ${dm ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'}`}>Or continue with email</span>
-            </div>
-          </div> */}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -314,13 +298,13 @@ const LoginPage: React.FC<{ onSwitchToRegister: () => void; onBack?: () => void;
 // ─── Register Page ─────────────────────────────────────────────────────────────
 const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void; darkMode: boolean }> = ({ onSwitchToLogin, onBack, darkMode }) => {
   const dm = darkMode;
-  const [formData, setFormData]     = useState<FormData>({ name: '', email: '', password: '', confirmPassword: '' });
-  const [role, setRole]             = useState<'STUDENT' | 'TEACHER'>('STUDENT');
-  const [teacherCode, setTeacherCode] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState('');
-  const [success, setSuccess]       = useState('');
+  const [formData, setFormData]           = useState<FormData>({ name: '', email: '', password: '', confirmPassword: '' });
+  const [role, setRole]                   = useState<'STUDENT' | 'TEACHER'>('STUDENT');
+  const [teacherCode, setTeacherCode]     = useState('');
+  const [showPassword, setShowPassword]   = useState(false);
+  const [loading, setLoading]             = useState(false);
+  const [error, setError]                 = useState('');
+  const [success, setSuccess]             = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const TEACHER_REGISTRATION_CODE = 'P8YGJCVR2';
 
@@ -379,24 +363,12 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void;
           {error   && <div className={`mb-4 p-3 sm:p-4 rounded-xl flex items-center gap-3 border ${dm ? 'bg-red-950 border-red-800 text-red-300' : 'bg-red-50 border-red-200 text-red-600'}`}><AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" /><p className="text-xs sm:text-sm">{error}</p></div>}
           {success && <div className={`mb-4 p-3 sm:p-4 rounded-xl flex items-center gap-3 border ${dm ? 'bg-green-950 border-green-800 text-green-300' : 'bg-green-50 border-green-200 text-green-600'}`}><CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" /><p className="text-xs sm:text-sm">{success}</p></div>}
 
-          {/* <button onClick={() => signIn('google', { callbackUrl: '/' })} type="button"
-            className={`w-full flex items-center justify-center gap-3 border-2 rounded-xl py-2.5 sm:py-3 px-4 transition-colors mb-5 text-sm sm:text-base font-medium ${dm ? 'border-gray-600 text-gray-200 hover:bg-gray-700' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
-            <Chrome className="w-4 h-4 sm:w-5 sm:h-5" />Sign up with Google
-          </button> */}
-
-          {/* <div className="relative mb-5">
-            <div className="absolute inset-0 flex items-center"><div className={`w-full border-t ${dm ? 'border-gray-700' : 'border-gray-200'}`} /></div>
-            <div className="relative flex justify-center text-xs sm:text-sm">
-              <span className={`px-4 ${dm ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'}`}>Or register with email</span>
-            </div>
-          </div> */}
-
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className={`block text-xs sm:text-sm font-medium mb-2 sm:mb-3 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>I want to register as:</label>
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 {[
-                  { val: 'STUDENT', icon: GraduationCap, label: 'Student', sub: 'Learn and grow' },
+                  { val: 'STUDENT', icon: GraduationCap, label: 'Student', sub: 'Learn and grow'    },
                   { val: 'TEACHER', icon: UserCheck,     label: 'Teacher', sub: 'Teach and inspire' },
                 ].map(({ val, icon: Icon, label, sub }) => (
                   <button key={val} type="button" onClick={() => { setRole(val as any); setTeacherCode(''); setError(''); }}
@@ -429,8 +401,8 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void;
             )}
 
             {[
-              { field: 'name',  label: 'Full Name',     type: 'text',  placeholder: 'John Doe',           icon: UserIcon },
-              { field: 'email', label: 'Email Address', type: 'email', placeholder: 'you@example.com',     icon: Mail    },
+              { field: 'name',  label: 'Full Name',     type: 'text',  placeholder: 'John Doe',       icon: UserIcon },
+              { field: 'email', label: 'Email Address', type: 'email', placeholder: 'you@example.com', icon: Mail    },
             ].map(({ field, label, type, placeholder, icon: Icon }) => (
               <div key={field}>
                 <label className={`block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 ${dm ? 'text-gray-300' : 'text-gray-700'}`}>{label}</label>
@@ -504,8 +476,8 @@ function UserMenu({ session, darkMode, toggleDarkMode, onEditProfile, onSettings
         </div>
       </div>
       {[
-        { icon: Edit, label: 'Edit Profile', onClick: onEditProfile },
-        { icon: Settings, label: 'Settings', onClick: onSettings },
+        { icon: Edit,     label: 'Edit Profile', onClick: onEditProfile },
+        { icon: Settings, label: 'Settings',     onClick: onSettings    },
       ].map(({ icon: Icon, label, onClick }) => (
         <button key={label} onClick={onClick}
           className={`w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors ${dm ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}>
@@ -536,16 +508,45 @@ function UserMenu({ session, darkMode, toggleDarkMode, onEditProfile, onSettings
 const ProtectedLanding = () => {
   const { data: session, status, update } = useSession();
   const router = useRouter();
-  const [authScreen, setAuthScreen]       = useState<'login' | 'register' | null>(null);
+  const [authScreen, setAuthScreen]         = useState<'login' | 'register' | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [scrolled, setScrolled]           = useState(false);
+  const [scrolled, setScrolled]             = useState(false);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
-  const [currentScreen, setCurrentScreen] = useState('home');
-  const [showUserMenu, setShowUserMenu]   = useState(false);
-  const [darkMode, setDarkMode]           = useState(false);
+  const [currentScreen, setCurrentScreen]   = useState('home');
+  const [showUserMenu, setShowUserMenu]     = useState(false);
+  const [darkMode, setDarkMode]             = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [showSettings, setShowSettings]   = useState(false);
-  const [userProfile, setUserProfile]     = useState<any>(null);
+  const [showSettings, setShowSettings]     = useState(false);
+  const [userProfile, setUserProfile]       = useState<any>(null);
+
+  // ── ref for the user-menu trigger button (desktop + feature screen) ──
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close user menu when clicking outside of it
+  useEffect(() => {
+    if (!showUserMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    // small delay so the open-click itself doesn't immediately close it
+    const id = setTimeout(() => document.addEventListener('mousedown', handler), 0);
+    return () => { clearTimeout(id); document.removeEventListener('mousedown', handler); };
+  }, [showUserMenu]);
+
+  // Close mobile menu when clicking outside of it
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    const id = setTimeout(() => document.addEventListener('mousedown', handler), 0);
+    return () => { clearTimeout(id); document.removeEventListener('mousedown', handler); };
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     const saved = localStorage.getItem('darkMode') === 'true';
@@ -586,21 +587,21 @@ const ProtectedLanding = () => {
   const handleProfileUpdate = async (data: any) => { setUserProfile(data); await update(); };
 
   const platformFeatures = [
-    { id: 'notes',        icon: BookOpen,      title: 'Study Notes Library',  description: 'Access comprehensive study materials and notes shared by expert teachers', color: 'from-blue-500 to-cyan-500',     tag: 'Most Popular'  , component: <NotesLibrary /> },
-    { id: 'assignments',  icon: FileText,      title: 'Smart Assignments',    description: 'AI-powered assignment system with automatic grading and detailed feedback', color: 'from-purple-500 to-pink-500',   tag: 'Top Rated'     , component: <StudentAssignmentDashboard /> },
-    { id: 'study-planner',icon: Brain,         title: 'AI Study Planner',     description: 'Get personalized study schedules based on your goals, pace, and performance', color: 'from-indigo-500 to-purple-500', tag: 'AI Powered'    , component: <StudyPlanner /> },
-    { id: 'teacher',      icon: UserCheck,     title: 'Teacher Dashboard',    description: 'Comprehensive management tools for educators to track and mentor students', color: 'from-orange-500 to-red-500',    tag: 'Professional'  , component: <TeacherInterface /> },
-    { id: 'quizzes',      icon: Target,        title: 'Practice & Mock Tests', description: 'Unlimited quizzes with instant AI evaluation and performance analytics', color: 'from-green-500 to-teal-500',    tag: 'Exam Ready'    , component: <QuizInterface /> },
-    { id: 'videos',       icon: Play,          title: 'Video Library',        description: 'Access high-quality recorded lectures available 24/7',                     color: 'from-rose-500 to-pink-500',     tag: 'On Demand'     , component: <VideoPlayer /> },
-    { id: 'doubts',       icon: MessageSquare, title: 'Instant Doubt Solving', description: 'Get answers from AI tutor instantly or connect with expert mentors',       color: 'from-yellow-500 to-orange-500', tag: 'Always Active' , component: <DoubtComponent /> },
-    { id: 'payments',     icon: CreditCard,    title: 'Secure Payments',      description: 'Safe and encrypted payment gateway with multiple payment options',         color: 'from-emerald-500 to-green-500', tag: 'Protected'     , component: <PaymentDemo /> },
+    { id: 'notes',         icon: BookOpen,      title: 'Study Notes Library',   description: 'Access comprehensive study materials and notes shared by expert teachers', color: 'from-blue-500 to-cyan-500',     tag: 'Most Popular',  component: <NotesLibrary /> },
+    { id: 'assignments',   icon: FileText,      title: 'Smart Assignments',     description: 'AI-powered assignment system with automatic grading and detailed feedback', color: 'from-purple-500 to-pink-500',   tag: 'Top Rated',     component: <StudentAssignmentDashboard /> },
+    { id: 'study-planner', icon: Brain,         title: 'AI Study Planner',      description: 'Get personalized study schedules based on your goals, pace, and performance', color: 'from-indigo-500 to-purple-500', tag: 'AI Powered',    component: <StudyPlanner /> },
+    { id: 'teacher',       icon: UserCheck,     title: 'Teacher Dashboard',     description: 'Comprehensive management tools for educators to track and mentor students', color: 'from-orange-500 to-red-500',    tag: 'Professional',  component: <TeacherInterface /> },
+    { id: 'quizzes',       icon: Target,        title: 'Practice & Mock Tests', description: 'Unlimited quizzes with instant AI evaluation and performance analytics',   color: 'from-green-500 to-teal-500',    tag: 'Exam Ready',    component: <QuizInterface /> },
+    { id: 'videos',        icon: Play,          title: 'Video Library',         description: 'Access high-quality recorded lectures available 24/7',                    color: 'from-rose-500 to-pink-500',     tag: 'On Demand',     component: <VideoPlayer /> },
+    { id: 'doubts',        icon: MessageSquare, title: 'Instant Doubt Solving', description: 'Get answers from AI tutor instantly or connect with expert mentors',      color: 'from-yellow-500 to-orange-500', tag: 'Always Active', component: <DoubtComponent /> },
+    { id: 'payments',      icon: CreditCard,    title: 'Secure Payments',       description: 'Safe and encrypted payment gateway with multiple payment options',        color: 'from-emerald-500 to-green-500', tag: 'Protected',     component: <PaymentDemo /> },
   ];
 
   const stats = [
-    { value: '100+', label: 'Active Students', icon: Users },
-    { value: '95%',  label: 'Success Rate',    icon: Trophy },
+    { value: '100+', label: 'Active Students', icon: Users        },
+    { value: '95%',  label: 'Success Rate',    icon: Trophy       },
     { value: '4',    label: 'Expert Teachers', icon: GraduationCap },
-    { value: '24/7', label: 'Support',         icon: Clock },
+    { value: '24/7', label: 'Support',         icon: Clock        },
   ];
 
   const testimonials = [
@@ -622,33 +623,32 @@ const ProtectedLanding = () => {
   ];
 
   const benefits = [
-    { icon: Shield,    text: 'Industry-leading security' },
-    { icon: Globe,     text: 'Learn from anywhere'       },
-    { icon: Award,     text: 'Certified courses'         },
-    { icon: Headphones,text: '24/7 support'              },
-    { icon: Lock,      text: 'Privacy guaranteed'        },
-    { icon: Zap,       text: 'Instant access'            },
+    { icon: Shield,     text: 'Industry-leading security' },
+    { icon: Globe,      text: 'Learn from anywhere'       },
+    { icon: Award,      text: 'Certified courses'         },
+    { icon: Headphones, text: '24/7 support'              },
+    { icon: Lock,       text: 'Privacy guaranteed'        },
+    { icon: Zap,        text: 'Instant access'            },
   ];
 
   const openFeature = (id: string) => { if (!session) { setAuthScreen('register'); return; } setCurrentScreen(id); };
   const goHome = () => setCurrentScreen('home');
   const currentFeature = platformFeatures.find(f => f.id === currentScreen);
-
   const handleBookDemo = () => { router.push('/contact'); };
 
   const userMenuProps = {
     session, darkMode, toggleDarkMode,
-    onEditProfile: () => { setShowEditProfile(true); setShowUserMenu(false); setMobileMenuOpen(false); },
-    onSettings:    () => { setShowSettings(true);    setShowUserMenu(false); setMobileMenuOpen(false); },
-    onSwitchTeacher: () => { router.push('/teacher'); setShowUserMenu(false); setMobileMenuOpen(false); },
-    onLogout: () => { handleLogout(); setMobileMenuOpen(false); },
+    onEditProfile:   () => { setShowEditProfile(true); setShowUserMenu(false); setMobileMenuOpen(false); },
+    onSettings:      () => { setShowSettings(true);    setShowUserMenu(false); setMobileMenuOpen(false); },
+    onSwitchTeacher: () => { router.push('/teacher');  setShowUserMenu(false); setMobileMenuOpen(false); },
+    onLogout:        () => { handleLogout();            setMobileMenuOpen(false); },
     userProfile,
   };
 
   if (authScreen === 'login')    return <LoginPage    onSwitchToRegister={() => setAuthScreen('register')} onBack={() => setAuthScreen(null)} darkMode={dm} />;
   if (authScreen === 'register') return <RegisterPage onSwitchToLogin={() => setAuthScreen('login')}       onBack={() => setAuthScreen(null)} darkMode={dm} />;
 
-  // Feature Screen
+  // ── Feature Screen ──────────────────────────────────────────────────────────
   if (currentScreen !== 'home' && currentFeature && session) {
     return (
       <div className={`min-h-screen transition-colors ${dm ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
@@ -680,8 +680,9 @@ const ProtectedLanding = () => {
                   <div className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center"><CoachingLogo /></div>
                   <span className={`font-bold text-base lg:text-xl ${dm ? 'text-gray-100' : 'text-gray-900'}`}>Intense Learners</span>
                 </button>
-                <div className="relative">
-                  <button onClick={() => setShowUserMenu(!showUserMenu)}
+                {/* ── User menu (feature screen) ── */}
+                <div className="relative" ref={userMenuRef}>
+                  <button onClick={() => setShowUserMenu(v => !v)}
                     className="flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 sm:px-4 py-2 rounded-xl font-semibold hover:shadow-lg transition-all text-xs sm:text-sm">
                     <UserIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     <span className="hidden xs:inline truncate max-w-[80px] sm:max-w-[120px]">{session.user?.name}</span>
@@ -721,13 +722,13 @@ const ProtectedLanding = () => {
     );
   }
 
-  // Home / Landing Screen
+  // ── Home / Landing Screen ───────────────────────────────────────────────────
   return (
     <div className={`min-h-screen transition-colors ${dm ? 'bg-gray-900' : 'bg-white'}`}>
 
       {/* Navbar */}
       <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? `${dm ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-lg shadow-lg py-2 sm:py-3` : 'bg-transparent py-3 sm:py-4'}`}>
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8" ref={mobileMenuRef}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               <div className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center"><CoachingLogo /></div>
@@ -737,6 +738,7 @@ const ProtectedLanding = () => {
               </div>
             </div>
 
+            {/* Desktop nav */}
             <div className="hidden lg:flex items-center gap-6 xl:gap-8">
               {[
                 { href: '#platform',     label: 'Features'       },
@@ -753,8 +755,9 @@ const ProtectedLanding = () => {
                 {dm ? <Sun className="w-4 h-4 lg:w-5 lg:h-5" /> : <Moon className="w-4 h-4 lg:w-5 lg:h-5" />}
               </button>
               {session ? (
-                <div className="relative">
-                  <button onClick={() => setShowUserMenu(!showUserMenu)}
+                /* ── Desktop user menu ── */
+                <div className="relative" ref={userMenuRef}>
+                  <button onClick={() => setShowUserMenu(v => !v)}
                     className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 lg:px-6 py-2 lg:py-2.5 rounded-xl font-semibold hover:shadow-xl hover:scale-105 transition-all text-sm lg:text-base">
                     <UserIcon className="w-4 h-4" />{session.user?.name}
                   </button>
@@ -762,12 +765,10 @@ const ProtectedLanding = () => {
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  {/* Login Button */}
                   <button onClick={() => setAuthScreen('login')}
                     className="flex items-center gap-2 border-2 border-white/30 text-white px-5 py-2 rounded-xl font-semibold hover:bg-white/10 transition-all text-sm lg:text-base">
                     <LogIn className="w-4 h-4" />Login
                   </button>
-                  {/* Register Button */}
                   <button onClick={() => setAuthScreen('register')}
                     className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-5 py-2 rounded-xl font-semibold hover:shadow-xl hover:scale-105 transition-all text-sm lg:text-base">
                     <UserPlus className="w-4 h-4" />Register
@@ -776,12 +777,13 @@ const ProtectedLanding = () => {
               )}
             </div>
 
+            {/* Mobile right side */}
             <div className="flex lg:hidden items-center gap-1.5 sm:gap-2">
               <button onClick={toggleDarkMode}
                 className={`p-2 rounded-lg transition-all ${scrolled ? (dm ? 'bg-gray-700 text-yellow-400' : 'bg-gray-100 text-gray-600') : 'bg-white/15 text-white hover:bg-white/25'}`}>
                 {dm ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
-              <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 rounded-lg hover:bg-gray-100/10 transition-colors">
+              <button onClick={() => setMobileMenuOpen(v => !v)} className="p-2 rounded-lg hover:bg-gray-100/10 transition-colors">
                 {mobileMenuOpen
                   ? <X    className={`w-5 h-5 sm:w-6 sm:h-6 ${scrolled ? (dm ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`} />
                   : <Menu className={`w-5 h-5 sm:w-6 sm:h-6 ${scrolled ? (dm ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`} />}
@@ -789,6 +791,7 @@ const ProtectedLanding = () => {
             </div>
           </div>
 
+          {/* Mobile menu panel — inside the ref'd container so outside-clicks work */}
           {mobileMenuOpen && (
             <div className={`lg:hidden mt-3 sm:mt-4 rounded-2xl shadow-2xl p-4 sm:p-6 border ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
               <div className="flex flex-col gap-3 sm:gap-4">
@@ -816,8 +819,8 @@ const ProtectedLanding = () => {
                       </div>
                     </div>
                     {[
-                      { icon: Edit, label: 'Edit Profile', onClick: userMenuProps.onEditProfile },
-                      { icon: Settings, label: 'Settings', onClick: userMenuProps.onSettings },
+                      { icon: Edit,     label: 'Edit Profile', onClick: userMenuProps.onEditProfile },
+                      { icon: Settings, label: 'Settings',     onClick: userMenuProps.onSettings    },
                     ].map(({ icon: Icon, label, onClick }) => (
                       <button key={label} onClick={onClick}
                         className={`flex items-center gap-2 font-medium py-1.5 text-sm sm:text-base ${dm ? 'text-gray-200 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'}`}>
@@ -917,27 +920,20 @@ const ProtectedLanding = () => {
               </div>
             </div>
 
-            {/* Hero card with looping video */}
+            {/* Hero card */}
             <div className="relative hidden lg:block">
               <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-3xl blur-3xl opacity-20 animate-pulse" />
               <div className="relative bg-white/10 backdrop-blur-2xl rounded-3xl p-6 lg:p-8 border border-white/20 shadow-2xl">
                 <div className="bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl p-4 lg:p-6 mb-4 lg:mb-6">
                   <div className="aspect-video rounded-xl overflow-hidden relative">
-                    <video
-                      src="/hero-video.mp4"
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="w-full h-full object-cover"
-                    />
+                    <video src="/hero-video.mp4" autoPlay loop muted playsInline className="w-full h-full object-cover" />
                     <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-blue-900/40 to-transparent pointer-events-none" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 lg:gap-4">
                   {[
-                    { icon: Brain, label: 'AI Tutor',   sub: 'Instant Answers',   color: 'text-yellow-400' },
-                    { icon: Target, label: 'Mock Tests', sub: 'Unlimited Access', color: 'text-green-400'  },
+                    { icon: Brain,  label: 'AI Tutor',   sub: 'Instant Answers',  color: 'text-yellow-400' },
+                    { icon: Target, label: 'Mock Tests',  sub: 'Unlimited Access', color: 'text-green-400'  },
                   ].map(({ icon: Icon, label, sub, color }) => (
                     <div key={label} className="bg-white/10 backdrop-blur-lg rounded-xl p-3 lg:p-4 border border-white/20">
                       <Icon className={`w-6 h-6 lg:w-8 lg:h-8 ${color} mb-2`} />
@@ -993,7 +989,6 @@ const ProtectedLanding = () => {
                 <h3 className={`text-sm sm:text-base lg:text-xl font-bold mb-1.5 sm:mb-2 lg:mb-3 group-hover:text-indigo-600 transition-colors ${dm ? 'text-white' : 'text-gray-900'}`}>{feature.title}</h3>
                 <p className={`text-xs sm:text-sm mb-3 sm:mb-4 leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{feature.description}</p>
                 <div className={`flex items-center justify-end pt-3 border-t ${dm ? 'border-gray-700' : 'border-gray-100'}`}>
-                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 group-hover:translate-x-1 transition-transform" />
                 </div>
                 <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity pointer-events-none`} />
               </button>
@@ -1024,9 +1019,9 @@ const ProtectedLanding = () => {
             <div className="grid sm:grid-cols-3 gap-5 sm:gap-8 lg:gap-12 relative">
               <div className="hidden sm:block absolute top-10 sm:top-12 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600" />
               {[
-                { step: '01', title: 'Create Account',    desc: 'Sign up in 30 seconds and tell us your goals',  icon: GraduationCap, color: 'from-blue-500 to-cyan-500'   },
-                { step: '02', title: 'AI Personalization',desc: 'Get your custom study plan powered by AI',       icon: Brain,         color: 'from-purple-500 to-pink-500' },
-                { step: '03', title: 'Start Learning',    desc: 'Access all features and begin your journey',     icon: Zap,           color: 'from-orange-500 to-red-500'  },
+                { step: '01', title: 'Create Account',     desc: 'Sign up in 30 seconds and tell us your goals',  icon: GraduationCap, color: 'from-blue-500 to-cyan-500'   },
+                { step: '02', title: 'AI Personalization', desc: 'Get your custom study plan powered by AI',       icon: Brain,         color: 'from-purple-500 to-pink-500' },
+                { step: '03', title: 'Start Learning',     desc: 'Access all features and begin your journey',     icon: Zap,           color: 'from-orange-500 to-red-500'  },
               ].map((item, idx) => (
                 <div key={idx} className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 lg:p-8 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-2 border border-gray-200">
                   <div className={`inline-flex items-center justify-center w-14 h-14 lg:w-20 lg:h-20 bg-gradient-to-br ${item.color} rounded-xl sm:rounded-2xl mb-4 sm:mb-6 shadow-lg`}>
@@ -1123,9 +1118,7 @@ const ProtectedLanding = () => {
               <Calendar className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />Book a Demo
             </button>
           </div>
-          <p className="text-purple-200 mt-4 sm:mt-6 text-xs sm:text-sm px-4">
-            ✓ 5-day free trial &nbsp;&nbsp;&nbsp; ✓ Cancel anytime
-          </p>
+          <p className="text-purple-200 mt-4 sm:mt-6 text-xs sm:text-sm px-4">✓ 5-day free trial &nbsp;&nbsp;&nbsp; ✓ Cancel anytime</p>
         </div>
       </div>
 
@@ -1157,10 +1150,10 @@ const ProtectedLanding = () => {
 
             {[
               { title: 'Platform', items: [
-                { label: 'Study Notes',     id: 'notes'        },
-                { label: 'Assignments',     id: 'assignments'  },
-                { label: 'AI Study Planner',id: 'study-planner'},
-                { label: 'Mock Tests',      id: 'quizzes'      },
+                { label: 'Study Notes',      id: 'notes'        },
+                { label: 'Assignments',      id: 'assignments'  },
+                { label: 'AI Study Planner', id: 'study-planner'},
+                { label: 'Mock Tests',       id: 'quizzes'      },
               ]},
               { title: 'Resources', links: ['Blog', 'Help Center', 'Community', 'Contact Us'] },
               { title: 'Legal',     links: ['Privacy Policy', 'Terms of Service', 'Cookie Policy', 'Refund Policy'] },

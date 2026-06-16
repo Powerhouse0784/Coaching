@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -56,6 +56,12 @@ export default function TeacherDashboard() {
   const [userProfile, setUserProfile]     = useState<any>(null);
   const [loading, setLoading]             = useState(true);
 
+  // ── Click-outside refs ──
+  // Wraps the user-menu trigger button + its dropdown (used in both navbar states)
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  // Wraps the mobile hamburger button + its slide-down panel
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+
   // ── Dark mode detection (same pattern as student dashboard) ──
   const [darkMode, setDarkMode] = useState(false);
   useEffect(() => {
@@ -95,6 +101,30 @@ export default function TeacherDashboard() {
         .finally(() => setLoading(false));
     }
   }, [session, status]);
+
+  // ── Click-outside-to-close: user menu dropdown ──
+  useEffect(() => {
+    if (!showUserMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showUserMenu]);
+
+  // ── Click-outside-to-close: mobile hamburger menu ──
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [mobileMenuOpen]);
 
   const handleLogout = async () => { await signOut({ callbackUrl: '/' }); };
   const handleProfileUpdate = async (data: any) => { setUserProfile(data); await update(); };
@@ -213,6 +243,7 @@ export default function TeacherDashboard() {
                 <div className="hidden sm:block min-w-0">
                   <h1 className={`text-base sm:text-lg font-bold truncate ${dm ? 'text-gray-100' : 'text-gray-900'}`}>{currentFeature.title}</h1>
                   <p className={`text-xs truncate ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{currentFeature.description}</p>
+                  
                 </div>
               </div>
 
@@ -228,7 +259,7 @@ export default function TeacherDashboard() {
                   <span className={`font-bold text-base lg:text-xl ${dm ? 'text-gray-100' : 'text-gray-900'}`}>Intense Learners</span>
                 </button>
 
-                <div className="relative">
+                <div className="relative" ref={userMenuRef}>
                   <button onClick={() => setShowUserMenu(!showUserMenu)}
                     className="flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 sm:px-4 py-2 rounded-xl font-semibold hover:shadow-lg transition-all text-xs sm:text-sm">
                     <UserIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -252,6 +283,7 @@ export default function TeacherDashboard() {
                     {currentFeature.tag && <span className="bg-white/20 text-white px-2.5 py-0.5 rounded-full text-xs font-bold">{currentFeature.tag}</span>}
                   </div>
                   <p className="text-white/90 text-xs sm:text-sm lg:text-base">{currentFeature.description}</p>
+                  
                 </div>
                 <div className="bg-white/20 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl flex-shrink-0">
                   
@@ -318,7 +350,7 @@ export default function TeacherDashboard() {
                 {dm ? <Sun className="w-4 h-4 lg:w-5 lg:h-5" /> : <Moon className="w-4 h-4 lg:w-5 lg:h-5" />}
               </button>
 
-              <div className="relative">
+              <div className="relative" ref={userMenuRef}>
                 <button onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 lg:px-6 py-2 lg:py-2.5 rounded-xl font-semibold hover:shadow-xl hover:scale-105 transition-all text-sm lg:text-base">
                   <UserIcon className="w-4 h-4" />{session?.user?.name}
@@ -328,7 +360,7 @@ export default function TeacherDashboard() {
             </div>
 
             {/* Mobile: dark toggle + hamburger */}
-            <div className="flex lg:hidden items-center gap-1.5 sm:gap-2">
+            <div className="flex lg:hidden items-center gap-1.5 sm:gap-2" ref={mobileMenuRef}>
               <button onClick={toggleDarkMode}
                 className={`p-2 rounded-lg transition-all ${scrolled ? (dm ? 'bg-gray-700 text-yellow-400' : 'bg-gray-100 text-gray-600') : 'bg-white/15 text-white hover:bg-white/25'}`}>
                 {dm ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
@@ -338,52 +370,52 @@ export default function TeacherDashboard() {
                   ? <X    className={`w-5 h-5 sm:w-6 sm:h-6 ${scrolled ? (dm ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`} />
                   : <Menu className={`w-5 h-5 sm:w-6 sm:h-6 ${scrolled ? (dm ? 'text-gray-100' : 'text-gray-900') : 'text-white'}`} />}
               </button>
-            </div>
-          </div>
 
-          {/* Mobile Menu */}
-          {mobileMenuOpen && (
-            <div className={`lg:hidden mt-3 sm:mt-4 rounded-2xl shadow-2xl p-4 sm:p-6 border ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-              <div className="flex flex-col gap-3 sm:gap-4">
-                {[
-                  { href: '#features', label: 'Features'  },
-                  { href: '#stats',    label: 'Analytics' },
-                ].map(({ href, label }) => (
-                  <a key={label} href={href} onClick={() => setMobileMenuOpen(false)}
-                    className={`font-medium py-1.5 text-sm sm:text-base ${dm ? 'text-gray-200 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'}`}>{label}</a>
-                ))}
+              {/* Mobile Menu Panel — moved inside the ref wrapper so outside-clicks close it */}
+              {mobileMenuOpen && (
+                <div className={`lg:hidden fixed left-3 right-3 top-[60px] sm:top-[68px] mt-0 rounded-2xl shadow-2xl p-4 sm:p-6 border z-50 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                  <div className="flex flex-col gap-3 sm:gap-4">
+                    {[
+                      { href: '#features', label: 'Features'  },
+                      { href: '#stats',    label: 'Analytics' },
+                    ].map(({ href, label }) => (
+                      <a key={label} href={href} onClick={() => setMobileMenuOpen(false)}
+                        className={`font-medium py-1.5 text-sm sm:text-base ${dm ? 'text-gray-200 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'}`}>{label}</a>
+                    ))}
 
-                <div className={`border-t pt-3 sm:pt-4 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0">
-                      {userProfile?.avatar
-                        ? <img src={userProfile.avatar} alt="" className="w-full h-full object-cover" />
-                        : <span className="text-white font-bold">{session?.user?.name?.[0]}</span>}
+                    <div className={`border-t pt-3 sm:pt-4 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                          {userProfile?.avatar
+                            ? <img src={userProfile.avatar} alt="" className="w-full h-full object-cover" />
+                            : <span className="text-white font-bold">{session?.user?.name?.[0]}</span>}
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-sm font-semibold truncate ${dm ? 'text-gray-100' : 'text-gray-900'}`}>{session?.user?.name}</p>
+                          <p className={`text-xs truncate ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{session?.user?.email}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className={`text-sm font-semibold truncate ${dm ? 'text-gray-100' : 'text-gray-900'}`}>{session?.user?.name}</p>
-                      <p className={`text-xs truncate ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{session?.user?.email}</p>
-                    </div>
+
+                    {[
+                      { icon: Edit,     label: 'Edit Profile',          onClick: () => { setShowEditProfile(true);  setMobileMenuOpen(false); } },
+                      { icon: Settings, label: 'Settings',               onClick: () => { setShowSettings(true);    setMobileMenuOpen(false); } },
+                      { icon: Eye,      label: 'Switch to Student View', onClick: () => { router.push('/student');  setMobileMenuOpen(false); } },
+                    ].map(({ icon: Icon, label, onClick }) => (
+                      <button key={label} onClick={onClick}
+                        className={`flex items-center gap-2 font-medium py-1.5 text-sm sm:text-base ${dm ? 'text-gray-200 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'}`}>
+                        <Icon className="w-4 h-4" />{label}
+                      </button>
+                    ))}
+
+                    <button onClick={handleLogout} className="flex items-center gap-2 text-red-500 hover:text-red-400 font-medium py-1.5 text-sm sm:text-base">
+                      <LogOut className="w-4 h-4" />Logout
+                    </button>
                   </div>
                 </div>
-
-                {[
-                  { icon: Edit,     label: 'Edit Profile',          onClick: () => { setShowEditProfile(true);  setMobileMenuOpen(false); } },
-                  { icon: Settings, label: 'Settings',               onClick: () => { setShowSettings(true);    setMobileMenuOpen(false); } },
-                  { icon: Eye,      label: 'Switch to Student View', onClick: () => { router.push('/student');  setMobileMenuOpen(false); } },
-                ].map(({ icon: Icon, label, onClick }) => (
-                  <button key={label} onClick={onClick}
-                    className={`flex items-center gap-2 font-medium py-1.5 text-sm sm:text-base ${dm ? 'text-gray-200 hover:text-indigo-400' : 'text-gray-700 hover:text-indigo-600'}`}>
-                    <Icon className="w-4 h-4" />{label}
-                  </button>
-                ))}
-
-                <button onClick={handleLogout} className="flex items-center gap-2 text-red-500 hover:text-red-400 font-medium py-1.5 text-sm sm:text-base">
-                  <LogOut className="w-4 h-4" />Logout
-                </button>
-              </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </nav>
 
@@ -513,11 +545,6 @@ export default function TeacherDashboard() {
                 <p className={`text-xs sm:text-sm mb-3 sm:mb-4 leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
                   {feature.description}
                 </p>
-
-                <div className={`flex items-center justify-between pt-3 border-t ${dm ? 'border-gray-700' : 'border-gray-100'}`}>
-                  
-                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 group-hover:translate-x-1 transition-transform" />
-                </div>
 
                 <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity pointer-events-none`} />
               </button>
