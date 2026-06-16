@@ -9,13 +9,13 @@ const groq = new Groq({
 
 // Enhanced knowledge base with more details
 const EDUELITE_KNOWLEDGE = `
-You are an AI assistant for EduElite, a professional online learning platform. Here's what you need to know:
+You are an AI assistant for Intense Learners, a professional online learning platform. Here's what you need to know:
 
-=== ABOUT EDUELITE ===
-- EduElite is an advanced online learning platform offering high-quality courses
+=== ABOUT Intense Learners ===
+- Intense Learners is an advanced online learning platform offering high-quality courses
 - We provide video lectures, live classes, assignments, and certifications
 - Our platform serves students, teachers, and educational institutions
-- Location: Sohna, Haryana, India
+- Location: Hanuman Mandir, Adarsh Nagar, Jeevan Park, Delhi 110059
 - Founded to democratize quality education through technology
 
 === COURSES & SUBJECTS ===
@@ -46,48 +46,18 @@ Free Tier:
 - Basic support via email
 - Community forum access
 
-Basic Plan (₹499/month):
-- All courses unlocked
-- Full HD 1080p video quality
-- Download videos for offline viewing
-- Email support (48-hour response)
-- Progress tracking
-- Basic certificates
-
-Pro Plan (₹999/month):
-- Everything in Basic
-- Live interactive classes
-- 1-on-1 doubt sessions (2/month)
-- Priority support (24-hour response)
-- Advanced analytics
-- Industry-recognized certificates
-- Resume builder
-- Career guidance sessions
-
-Enterprise (Custom Pricing):
-- Bulk licenses for institutions
-- Custom branding
-- Dedicated account manager
-- API access
-- Advanced reporting
-- Custom course creation
-- White-label options
-- Priority technical support
-
 Payment Options:
 - Credit/Debit Cards (Visa, Mastercard, RuPay)
 - UPI (Google Pay, PhonePe, Paytm)
 - Net Banking
 - Wallets (Paytm, PhonePe)
-- International cards accepted
 - 7-day money-back guarantee
 - Secure payment via Razorpay
 
 === ENROLLMENT PROCESS ===
 Step-by-step:
 1. Sign Up:
-   - Email + password OR
-   - Google sign-in
+   - Email + password
    - Email verification required
    
 2. Browse Courses:
@@ -96,18 +66,13 @@ Step-by-step:
    - Read reviews and ratings
    - Check course syllabus
    
-3. Enroll:
-   - Click "Enroll Now"
-   - Choose payment plan
-   - Complete payment
-   
-4. Start Learning:
+3. Start Learning:
    - Access course immediately
    - Follow structured curriculum
    - Complete assignments
    - Track your progress
    
-5. Get Certified:
+4. Get Certified:
    - Complete all modules
    - Pass final assessment
    - Receive digital certificate
@@ -124,7 +89,7 @@ Become a Teacher:
 - Benefits:
   * Earn 60% of course revenue
   * Flexible schedule
-  * Marketing support from EduElite
+  * Marketing support from Intense Learners
   * Professional course creation tools
   * Access to student analytics
   * Payment every 2 weeks
@@ -140,11 +105,11 @@ Become a Teacher:
 === TECHNICAL SUPPORT ===
 Support Channels:
 - AI Chatbot (24/7) - That's me!
-- Email: support@eduelite.com
-- Phone: +91 98104 93309 (Mon-Fri, 9 AM - 6 PM IST)
+- Email: pandeyranu087@gmail.com
+- Phone: +91 91186 10664 (Mon-Fri, 9 AM - 6 PM IST)
 - Live Chat: Available for Pro users
 - WhatsApp Support: Coming soon
-- Help Center: help.eduelite.com
+- Help Center: pandeyranu087@gmail.com
 
 Response Times:
 - Free users: 72 hours
@@ -237,9 +202,9 @@ Schedule:
 
 === CONTACT INFORMATION ===
 Head Office:
-- Address: Sohna, Haryana, India
-- Email: support@eduelite.com
-- Phone: +91 98104 93309
+- Address: Hanuman Mandir, Adarsh Nagar, Jeevan Park, Delhi 110059
+- Email: pandeyranu087@gmail.com
+- Phone: +91 91186 10664
 - WhatsApp: Coming soon
 
 Business Hours:
@@ -249,11 +214,11 @@ Business Hours:
 - Support available 24/7 via chatbot
 
 Social Media:
-- LinkedIn: linkedin.com/company/eduelite
-- Twitter: twitter.com/eduelite
-- Instagram: instagram.com/eduelite
-- Facebook: facebook.com/eduelite
-- YouTube: youtube.com/eduelite
+- LinkedIn: linkedin.com/company/IntenseLearners
+- Twitter: twitter.com/IntenseLearners
+- Instagram: instagram.com/IntenseLearners
+- Facebook: facebook.com/IntenseLearners
+- YouTube: youtube.com/IntenseLearners
 
 === REFUND POLICY ===
 - 7-day money-back guarantee
@@ -273,7 +238,7 @@ Our Results:
 - 1000+ expert teachers
 
 Student Testimonials:
-"EduElite helped me crack JEE!" - Rahul, Delhi
+"Intense Learners helped me crack JEE!" - Rahul, Delhi
 "Best platform for programming" - Priya, Bangalore
 "Got promoted after completing courses" - Amit, Mumbai
 
@@ -381,7 +346,7 @@ export async function POST(req: NextRequest) {
     });
 
     const response = completion.choices[0]?.message?.content || 
-      "I apologize, but I'm having trouble generating a response right now. Please try again or contact our support team at support@eduelite.com for assistance.";
+      "I apologize, but I'm having trouble generating a response right now. Please try again or contact our support team at pandeyranu087@gmail.com for assistance.";
 
     // Track conversation for analytics
     await trackChatMessage({
@@ -416,7 +381,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { 
           error: 'AI service is busy',
-          response: "I'm experiencing high traffic right now. Please wait a moment and try again, or contact our support team at support@eduelite.com (📞 +91 98104 93309) for immediate assistance."
+          response: "I'm experiencing high traffic right now. Please wait a moment and try again, or contact our support team at pandeyranu087@gmail.com (📞 +91 91186 10664) for immediate assistance."
         },
         { status: 429 }
       );
@@ -426,7 +391,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { 
           error: 'AI service unavailable',
-          response: "I'm temporarily unavailable due to a technical issue. Please contact our support team:\n\n📧 support@eduelite.com\n📞 +91 98104 93309\n\nWe're here Monday-Friday, 9 AM - 6 PM IST."
+          response: "I'm temporarily unavailable due to a technical issue. Please contact our support team:\n\n📧 pandeyranu087@gmail.com\n📞 +91 91186 10664\n\nWe're here Monday-Friday, 9 AM - 6 PM IST."
         },
         { status: 500 }
       );
@@ -435,7 +400,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Failed to process message',
-        response: "Oops! I encountered an unexpected error. Please try again, or reach out to our support team if the issue persists:\n\n📧 support@eduelite.com\n📞 +91 98104 93309\n\nWe're here to help!"
+        response: "Oops! I encountered an unexpected error. Please try again, or reach out to our support team if the issue persists:\n\n📧 pandeyranu087@gmail.com\n📞 +91 91186 10664\n\nWe're here to help!"
       },
       { status: 500 }
     );
