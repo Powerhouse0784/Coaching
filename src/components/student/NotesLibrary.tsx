@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import {
   FileText, Search, Download, Eye, Bookmark, BookmarkCheck,
-  RefreshCw, Loader, Star, Filter, X, ChevronDown, User
+  RefreshCw, Loader, Star, X, Filter,
 } from 'lucide-react';
 
 interface Note {
@@ -24,101 +24,176 @@ interface Note {
   downloads: number;
   views: number;
   createdAt: string;
-  teacher: {
-    name: string | null;
-    avatar: string | null;
-  };
+  teacher: { name: string | null; avatar: string | null };
   isBookmarked: boolean;
-  stats: {
-    totalBookmarks: number;
-  };
+  stats: { totalBookmarks: number };
 }
 
 export default function NotesLibrary() {
   const { data: session } = useSession();
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [filteredNotes, setFilteredNotes] = useState<Note[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<string>('all');
-  const [selectedSubject, setSelectedSubject] = useState<string>('all');
-  const [selectedClass, setSelectedClass] = useState<string>('all');
 
-  // ── Dark mode detection (same pattern as AssignmentCard) ──
+  // ── Master data (fetched once from API) ──
+  const [allNotes, setAllNotes] = useState<Note[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // ── UI filter state (all local, zero API calls) ──
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [selectedSubject, setSelectedSubject] = useState('all');
+  const [selectedClass, setSelectedClass] = useState('all');
+
+  // ── Dark mode ──
   const [darkMode, setDarkMode] = useState(false);
   useEffect(() => {
     const check = () => setDarkMode(document.documentElement.classList.contains('dark'));
     check();
-    const observer = new MutationObserver(check);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
+    const obs = new MutationObserver(check);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
   }, []);
   const dm = darkMode;
 
-  const fetchNotes = async () => {
-    setLoading(true);
+  // ── Debounce search input (300 ms) ──
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // ── Fetch ALL notes once (no filter params sent to API) ──
+  const fetchNotes = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     try {
-      const params = new URLSearchParams({
-        filter: selectedFilter,
-        subject: selectedSubject,
-        class: selectedClass,
-        search: searchQuery,
-      });
-      const response = await fetch(`/api/student/notes?${params}`);
-      const data = await response.json();
-      if (data.success) {
-        setNotes(data.notes);
-        setFilteredNotes(data.notes);
-      }
-    } catch (error) {
-      console.error('Error fetching notes:', error);
+      const res = await fetch('/api/student/notes');
+      const data = await res.json();
+      if (data.success) setAllNotes(data.notes);
+    } catch (e) {
+      console.error('Error fetching notes:', e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchNotes(); }, [selectedFilter, selectedSubject, selectedClass, searchQuery]);
+  useEffect(() => { fetchNotes(); }, [fetchNotes]);
 
-  const subjects = Array.from(new Set(notes.map((n) => n.subject)));
-  const classes = Array.from(new Set(notes.map((n) => n.class)));
+  // ── Derive subjects & classes from master list ──
+  const subjects = useMemo(() => Array.from(new Set(allNotes.map((n) => n.subject))).sort(), [allNotes]);
+  const classes  = useMemo(() => Array.from(new Set(allNotes.map((n) => n.class))).sort(),   [allNotes]);
 
-  const totalNotes = notes.length;
-  const bookmarkedNotes = notes.filter((n) => n.isBookmarked).length;
-  const totalDownloads = notes.reduce((sum, n) => sum + n.downloads, 0);
-  const pinnedNotes = notes.filter((n) => n.isPinned).length;
+  // ── ALL filtering happens here, locally, instantly ──
+  const filteredNotes = useMemo(() => {
+    let notes = [...allNotes];
 
+    // Tab filter
+    if (selectedFilter === 'bookmarked') {
+      notes = notes.filter((n) => n.isBookmarked);
+    } else if (selectedFilter === 'recent') {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 7);
+      notes = notes.filter((n) => new Date(n.createdAt) > cutoff);
+    } else if (selectedFilter === 'popular') {
+      notes = [...notes].sort((a, b) => b.downloads - a.downloads);
+    }
+
+    // Subject & class
+    if (selectedSubject !== 'all') notes = notes.filter((n) => n.subject === selectedSubject);
+    if (selectedClass   !== 'all') notes = notes.filter((n) => n.class   === selectedClass);
+
+    // Search (uses debounced value so it only runs 300ms after typing stops)
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
+      notes = notes.filter(
+        (n) =>
+          n.title.toLowerCase().includes(q) ||
+          (n.description?.toLowerCase().includes(q) ?? false) ||
+          (n.topic?.toLowerCase().includes(q)       ?? false) ||
+          (n.chapter?.toLowerCase().includes(q)     ?? false) ||
+          n.subject.toLowerCase().includes(q) ||
+          n.class.toLowerCase().includes(q),
+      );
+    }
+
+    return notes;
+  }, [allNotes, selectedFilter, selectedSubject, selectedClass, debouncedSearch]);
+
+  // ── Stats (from master list, not filtered) ──
+  const totalNotes      = allNotes.length;
+  const bookmarkedNotes = allNotes.filter((n) => n.isBookmarked).length;
+  const totalDownloads  = allNotes.reduce((s, n) => s + n.downloads, 0);
+  const pinnedNotes     = allNotes.filter((n) => n.isPinned).length;
+
+  // ── Bookmark (optimistic update — no full refetch) ──
   const handleBookmark = async (noteId: string) => {
+    // Optimistic toggle immediately
+    setAllNotes((prev) =>
+      prev.map((n) =>
+        n.id !== noteId ? n : {
+          ...n,
+          isBookmarked: !n.isBookmarked,
+          stats: {
+            totalBookmarks: n.isBookmarked
+              ? n.stats.totalBookmarks - 1
+              : n.stats.totalBookmarks + 1,
+          },
+        },
+      ),
+    );
     try {
-      const response = await fetch('/api/student/notes', {
+      await fetch('/api/student/notes', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ noteId }),
       });
-      const data = await response.json();
-      if (data.success) fetchNotes();
-    } catch (error) { console.error('Error:', error); }
+    } catch (e) {
+      console.error('Bookmark error:', e);
+      // Revert on failure
+      setAllNotes((prev) =>
+        prev.map((n) =>
+          n.id !== noteId ? n : {
+            ...n,
+            isBookmarked: !n.isBookmarked,
+            stats: {
+              totalBookmarks: n.isBookmarked
+                ? n.stats.totalBookmarks - 1
+                : n.stats.totalBookmarks + 1,
+            },
+          },
+        ),
+      );
+    }
   };
 
+  // ── Optimistic download counter ──
   const handleDownload = async (noteId: string, fileUrl: string, fileName: string) => {
+    setAllNotes((prev) =>
+      prev.map((n) => (n.id === noteId ? { ...n, downloads: n.downloads + 1 } : n)),
+    );
+    window.open(fileUrl, '_blank');
     try {
       await fetch('/api/student/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ noteId, action: 'download' }),
       });
-      window.open(fileUrl, '_blank');
-    } catch (error) { console.error('Error:', error); }
+    } catch (e) { console.error(e); }
   };
 
+  // ── Optimistic view counter ──
   const handleView = async (noteId: string, fileUrl: string) => {
+    setAllNotes((prev) =>
+      prev.map((n) => (n.id === noteId ? { ...n, views: n.views + 1 } : n)),
+    );
+    window.open(fileUrl, '_blank');
     try {
       await fetch('/api/student/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ noteId, action: 'view' }),
       });
-      window.open(fileUrl, '_blank');
-    } catch (error) { console.error('Error:', error); }
+    } catch (e) { console.error(e); }
   };
 
   const activeFilterCount = [
@@ -127,6 +202,7 @@ export default function NotesLibrary() {
     selectedClass !== 'all',
   ].filter(Boolean).length;
 
+  // ── Initial full-screen loader (only first load) ──
   if (loading) {
     return (
       <div className={`flex items-center justify-center min-h-[400px] ${dm ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
@@ -156,23 +232,24 @@ export default function NotesLibrary() {
             </p>
           </div>
           <button
-            onClick={fetchNotes}
-            className={`self-start sm:self-auto px-3 sm:px-4 py-2 border-2 rounded-xl hover:bg-opacity-80 transition flex items-center gap-2 font-semibold text-sm sm:text-base ${
+            onClick={() => fetchNotes(true)}
+            disabled={refreshing}
+            className={`self-start sm:self-auto px-3 sm:px-4 py-2 border-2 rounded-xl hover:bg-opacity-80 transition flex items-center gap-2 font-semibold text-sm sm:text-base disabled:opacity-60 ${
               dm ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
             }`}
           >
-            <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="hidden xs:inline">Refresh</span>
+            <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 ${refreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden xs:inline">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
           </button>
         </div>
 
         {/* ── Stats Grid ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
           {[
-            { icon: FileText,      iconBg: dm ? 'bg-blue-900'    : 'bg-blue-100',    iconColor: 'text-blue-500',    value: totalNotes,     label: 'Available Notes'  },
+            { icon: FileText,      iconBg: dm ? 'bg-blue-900'    : 'bg-blue-100',    iconColor: 'text-blue-500',    value: totalNotes,      label: 'Available Notes'  },
             { icon: BookmarkCheck, iconBg: dm ? 'bg-violet-900'  : 'bg-violet-100',  iconColor: 'text-violet-500',  value: bookmarkedNotes, label: 'Bookmarked'       },
             { icon: Download,      iconBg: dm ? 'bg-emerald-900' : 'bg-emerald-100', iconColor: 'text-emerald-500', value: totalDownloads,  label: 'Total Downloads'  },
-            { icon: Star,          iconBg: dm ? 'bg-amber-900'   : 'bg-amber-100',   iconColor: 'text-amber-500',   value: pinnedNotes,    label: 'Pinned Notes'     },
+            { icon: Star,          iconBg: dm ? 'bg-amber-900'   : 'bg-amber-100',   iconColor: 'text-amber-500',   value: pinnedNotes,     label: 'Pinned Notes'     },
           ].map(({ icon: Icon, iconBg, iconColor, value, label }) => (
             <div key={label} className={`rounded-xl sm:rounded-2xl p-3 sm:p-5 lg:p-6 border-2 hover:shadow-xl transition-all ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
               <div className="mb-2 sm:mb-3">
@@ -213,7 +290,7 @@ export default function NotesLibrary() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-          {/* Search */}
+          {/* Search — controlled, debounced */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
             <input
@@ -221,7 +298,7 @@ export default function NotesLibrary() {
               placeholder="Search notes, topics, subjects…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition-all text-sm sm:text-base ${
+              className={`w-full pl-9 sm:pl-10 pr-8 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition-all text-sm sm:text-base ${
                 dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-200 text-gray-900'
               }`}
             />
@@ -260,9 +337,9 @@ export default function NotesLibrary() {
         {/* Active chips */}
         {activeFilterCount > 0 && (
           <div className={`flex flex-wrap gap-2 mt-3 pt-3 border-t-2 ${dm ? 'border-gray-700' : 'border-gray-100'}`}>
-            {selectedFilter !== 'all' && <Chip label={selectedFilter} onRemove={() => setSelectedFilter('all')} dm={dm} />}
+            {selectedFilter  !== 'all' && <Chip label={selectedFilter}  onRemove={() => setSelectedFilter('all')}  dm={dm} />}
             {selectedSubject !== 'all' && <Chip label={selectedSubject} onRemove={() => setSelectedSubject('all')} dm={dm} />}
-            {selectedClass !== 'all' && <Chip label={selectedClass} onRemove={() => setSelectedClass('all')} dm={dm} />}
+            {selectedClass   !== 'all' && <Chip label={selectedClass}   onRemove={() => setSelectedClass('all')}   dm={dm} />}
             <button
               onClick={() => { setSelectedFilter('all'); setSelectedSubject('all'); setSelectedClass('all'); }}
               className="text-xs text-gray-400 hover:text-red-400 underline underline-offset-2 transition"
@@ -278,7 +355,9 @@ export default function NotesLibrary() {
         <p className={`text-xs mb-4 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>
           Showing{' '}
           <span className={`font-semibold ${dm ? 'text-gray-300' : 'text-gray-600'}`}>{filteredNotes.length}</span>{' '}
-          note{filteredNotes.length !== 1 ? 's' : ''}
+          of{' '}
+          <span className={`font-semibold ${dm ? 'text-gray-300' : 'text-gray-600'}`}>{totalNotes}</span>{' '}
+          note{totalNotes !== 1 ? 's' : ''}
         </p>
       )}
 
@@ -318,20 +397,14 @@ function Chip({ label, onRemove, dm }: { label: string; onRemove: () => void; dm
       dm ? 'bg-violet-900 text-violet-300 border-violet-700' : 'bg-violet-50 text-violet-700 border-violet-200'
     }`}>
       {label}
-      <button onClick={onRemove} className="hover:opacity-70 transition">
-        <X className="w-3 h-3" />
-      </button>
+      <button onClick={onRemove} className="hover:opacity-70 transition"><X className="w-3 h-3" /></button>
     </span>
   );
 }
 
 // ─── Note Card ───────────────────────────────────────────────────────────────
 function NoteCard({
-  note,
-  darkMode,
-  onBookmark,
-  onDownload,
-  onView,
+  note, darkMode, onBookmark, onDownload, onView,
 }: {
   note: Note;
   darkMode: boolean;
@@ -342,12 +415,12 @@ function NoteCard({
   const dm = darkMode;
 
   const subjectColorMap: Record<string, { light: string; dark: string }> = {
-    Mathematics: { light: 'bg-blue-100 text-blue-700',     dark: 'bg-blue-900 text-blue-300'     },
-    Physics:     { light: 'bg-violet-100 text-violet-700', dark: 'bg-violet-900 text-violet-300' },
-    Chemistry:   { light: 'bg-emerald-100 text-emerald-700',dark: 'bg-emerald-900 text-emerald-300'},
-    Biology:     { light: 'bg-green-100 text-green-700',   dark: 'bg-green-900 text-green-300'   },
-    English:     { light: 'bg-pink-100 text-pink-700',     dark: 'bg-pink-900 text-pink-300'     },
-    History:     { light: 'bg-amber-100 text-amber-700',   dark: 'bg-amber-900 text-amber-300'   },
+    Mathematics: { light: 'bg-blue-100 text-blue-700',      dark: 'bg-blue-900 text-blue-300'      },
+    Physics:     { light: 'bg-violet-100 text-violet-700',  dark: 'bg-violet-900 text-violet-300'  },
+    Chemistry:   { light: 'bg-emerald-100 text-emerald-700',dark: 'bg-emerald-900 text-emerald-300' },
+    Biology:     { light: 'bg-green-100 text-green-700',    dark: 'bg-green-900 text-green-300'    },
+    English:     { light: 'bg-pink-100 text-pink-700',      dark: 'bg-pink-900 text-pink-300'      },
+    History:     { light: 'bg-amber-100 text-amber-700',    dark: 'bg-amber-900 text-amber-300'    },
   };
   const subjectColor = subjectColorMap[note.subject]
     ? (dm ? subjectColorMap[note.subject].dark : subjectColorMap[note.subject].light)
@@ -358,7 +431,7 @@ function NoteCard({
       dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
     }`}>
 
-      {/* ── Thumbnail ── */}
+      {/* Thumbnail */}
       <div className={`relative h-40 sm:h-44 shrink-0 ${dm ? 'bg-gradient-to-br from-violet-950 to-pink-950' : 'bg-gradient-to-br from-violet-50 to-pink-50'}`}>
         {note.thumbnailUrl ? (
           <img src={note.thumbnailUrl} alt={note.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -383,14 +456,14 @@ function NoteCard({
                 : 'bg-white/90 text-gray-500 hover:bg-violet-600 hover:text-white'
           }`}
         >
-          {note.isBookmarked ? <BookmarkCheck className="w-4 h-4" fill="currentColor" /> : <Bookmark className="w-4 h-4" />}
+          {note.isBookmarked
+            ? <BookmarkCheck className="w-4 h-4" fill="currentColor" />
+            : <Bookmark className="w-4 h-4" />}
         </button>
       </div>
 
-      {/* ── Body ── */}
+      {/* Body */}
       <div className={`flex flex-col flex-1 p-4 sm:p-5 ${dm ? 'bg-gray-800' : 'bg-white'}`}>
-
-        {/* Tags */}
         <div className="flex items-center gap-2 flex-wrap mb-3">
           <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${subjectColor}`}>{note.subject}</span>
           <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${dm ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>{note.class}</span>
@@ -399,18 +472,9 @@ function NoteCard({
           )}
         </div>
 
-        {/* Title */}
         <h3 className={`text-sm sm:text-base font-bold mb-1 line-clamp-2 leading-snug ${dm ? 'text-white' : 'text-gray-900'}`}>{note.title}</h3>
-
-        {/* Topic */}
-        {note.topic && (
-          <p className={`text-xs mb-2 line-clamp-1 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>📌 {note.topic}</p>
-        )}
-
-        {/* Description */}
-        {note.description && (
-          <p className={`text-xs line-clamp-2 mb-3 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{note.description}</p>
-        )}
+        {note.topic      && <p className={`text-xs mb-2 line-clamp-1 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>📌 {note.topic}</p>}
+        {note.description && <p className={`text-xs line-clamp-2 mb-3 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{note.description}</p>}
 
         <div className="flex-1" />
 
@@ -430,16 +494,14 @@ function NoteCard({
           </div>
         </div>
 
-        {/* Stats row */}
+        {/* Stats */}
         <div className="grid grid-cols-3 gap-2 mb-4">
           {[
             { icon: Download, val: note.downloads,            label: 'Downloads' },
             { icon: Eye,      val: note.views,                label: 'Views'     },
             { icon: Bookmark, val: note.stats.totalBookmarks, label: 'Saved'     },
           ].map(({ icon: Icon, val, label }) => (
-            <div key={label} className={`flex flex-col items-center gap-0.5 py-2 rounded-xl border-2 ${
-              dm ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
-            }`}>
+            <div key={label} className={`flex flex-col items-center gap-0.5 py-2 rounded-xl border-2 ${dm ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
               <Icon className={`w-3.5 h-3.5 ${dm ? 'text-gray-400' : 'text-gray-400'}`} />
               <span className={`text-xs font-bold ${dm ? 'text-gray-200' : 'text-gray-800'}`}>{val}</span>
             </div>
@@ -462,7 +524,6 @@ function NoteCard({
           </button>
         </div>
 
-        {/* File meta */}
         <p className={`text-[11px] text-center mt-2 ${dm ? 'text-gray-600' : 'text-gray-400'}`}>
           {note.fileType.toUpperCase()} · {note.fileSize}
         </p>

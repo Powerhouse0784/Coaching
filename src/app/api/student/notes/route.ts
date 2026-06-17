@@ -30,52 +30,22 @@ interface ProcessedNote {
   };
 }
 
-// GET - Fetch all published notes for students
+// GET - Fetch ALL published notes (filtering is done client-side)
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(req.url);
-    const filter = searchParams.get('filter') || 'all';
-    const subject = searchParams.get('subject') || 'all';
-    const classFilter = searchParams.get('class') || 'all';
-    const search = searchParams.get('search') || '';
-
-    // Get student record for bookmarks
+    // Get student record for bookmark lookup
     const student = await prisma.student.findUnique({
       where: { userId: session.user.id },
     });
 
-    // Build where clause
-    const where: any = { isPublished: true };
-
-    // Filter by subject
-    if (subject !== 'all') {
-      where.subject = subject;
-    }
-
-    // Filter by class
-    if (classFilter !== 'all') {
-      where.class = classFilter;
-    }
-
-    // Search
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { topic: { contains: search, mode: 'insensitive' } },
-        { chapter: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    // Fetch notes
+    // Fetch all published notes — no filter/search/subject/class params
     const notes = await prisma.note.findMany({
-      where,
+      where: { isPublished: true },
       include: {
         teacher: {
           include: {
@@ -87,14 +57,11 @@ export async function GET(req: NextRequest) {
             },
           },
         },
-        bookmarks: student ? {
-          where: { studentId: student.id },
-          select: { id: true },
-        } : false,
+        bookmarks: student
+          ? { where: { studentId: student.id }, select: { id: true } }
+          : false,
         _count: {
-          select: {
-            bookmarks: true,
-          },
+          select: { bookmarks: true },
         },
       },
       orderBy: [
@@ -103,8 +70,7 @@ export async function GET(req: NextRequest) {
       ],
     });
 
-    // Process notes
-    let processedNotes: ProcessedNote[] = notes.map((note: any) => ({
+    const processedNotes: ProcessedNote[] = notes.map((note: any) => ({
       id: note.id,
       title: note.title,
       description: note.description,
@@ -131,19 +97,6 @@ export async function GET(req: NextRequest) {
       },
     }));
 
-    // Apply filters
-    if (filter === 'bookmarked' && student) {
-      processedNotes = processedNotes.filter((note: ProcessedNote) => note.isBookmarked);
-    } else if (filter === 'recent') {
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      processedNotes = processedNotes.filter(
-        (note: ProcessedNote) => new Date(note.createdAt) > oneWeekAgo
-      );
-    } else if (filter === 'popular') {
-      processedNotes = processedNotes.sort((a: ProcessedNote, b: ProcessedNote) => b.downloads - a.downloads);
-    }
-
     return NextResponse.json({ success: true, notes: processedNotes });
   } catch (error: any) {
     console.error('Error fetching notes:', error);
@@ -154,39 +107,33 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - Track download
+// POST - Track download or view (fire-and-forget from frontend)
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await req.json();
-    const { noteId, action } = body;
+    const { noteId, action } = await req.json();
 
     if (!noteId) {
       return NextResponse.json({ error: 'Note ID required' }, { status: 400 });
     }
 
-    // Track download
     if (action === 'download') {
       await prisma.note.update({
         where: { id: noteId },
         data: { downloads: { increment: 1 } },
       });
-
       return NextResponse.json({ success: true, message: 'Download tracked' });
     }
 
-    // Track view
     if (action === 'view') {
       await prisma.note.update({
         where: { id: noteId },
         data: { views: { increment: 1 } },
       });
-
       return NextResponse.json({ success: true, message: 'View tracked' });
     }
 
@@ -200,11 +147,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH - Bookmark/unbookmark note
+// PATCH - Bookmark / unbookmark a note
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -217,39 +163,25 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Student profile not found' }, { status: 404 });
     }
 
-    const body = await req.json();
-    const { noteId } = body;
+    const { noteId } = await req.json();
 
     if (!noteId) {
       return NextResponse.json({ error: 'Note ID required' }, { status: 400 });
     }
 
-    // Check if already bookmarked
     const existingBookmark = await prisma.noteBookmark.findUnique({
       where: {
-        noteId_studentId: {
-          noteId,
-          studentId: student.id,
-        },
+        noteId_studentId: { noteId, studentId: student.id },
       },
     });
 
     if (existingBookmark) {
-      // Remove bookmark
-      await prisma.noteBookmark.delete({
-        where: { id: existingBookmark.id },
-      });
-
+      await prisma.noteBookmark.delete({ where: { id: existingBookmark.id } });
       return NextResponse.json({ success: true, action: 'removed' });
     } else {
-      // Add bookmark
       await prisma.noteBookmark.create({
-        data: {
-          noteId,
-          studentId: student.id,
-        },
+        data: { noteId, studentId: student.id },
       });
-
       return NextResponse.json({ success: true, action: 'added' });
     }
   } catch (error: any) {
