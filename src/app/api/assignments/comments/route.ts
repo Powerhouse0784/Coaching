@@ -1,3 +1,4 @@
+// app/api/assignments/comments/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
@@ -60,6 +61,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Assignment ID and content required' }, { status: 400 });
     }
 
+    // Check if assignment exists
+    const assignment = await prisma.assignmentV2.findUnique({
+      where: { id: assignmentId },
+    });
+
+    if (!assignment) {
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
     const comment = await prisma.assignmentComment.create({
       data: {
         assignmentId,
@@ -118,7 +128,7 @@ export async function PATCH(req: NextRequest) {
     const updatedComment = await prisma.assignmentComment.update({
       where: { id: commentId },
       data: {
-        likes: action === 'like' ? comment.likes + 1 : Math.max(0, comment.likes - 1),
+        likes: action === 'like' ? { increment: 1 } : { decrement: 1 },
       },
     });
 
@@ -132,7 +142,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// ✅ DELETE - Delete comment (own comment OR teacher can delete any on their assignments)
+// DELETE - Delete comment
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -148,7 +158,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Comment ID required' }, { status: 400 });
     }
 
-    // ✅ Get comment with assignment teacher info
+    // Get comment with assignment teacher info
     const comment = await prisma.assignmentComment.findUnique({
       where: { id: commentId },
       include: {
@@ -168,9 +178,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
     }
 
-    // ✅ Check if user is comment owner OR assignment teacher
+    // Check if user is comment owner OR assignment teacher
     const isOwner = comment.userId === session.user.id;
-    const isTeacher = comment.assignment.teacher.userId === session.user.id;
+    const isTeacher = comment.assignment?.teacher?.userId === session.user.id;
 
     if (!isOwner && !isTeacher) {
       return NextResponse.json(

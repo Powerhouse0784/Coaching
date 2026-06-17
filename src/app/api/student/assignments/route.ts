@@ -1,23 +1,21 @@
+// app/api/student/assignments/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 
-// GET - Fetch all assignments for student (OPTIMIZED)
+// GET - Fetch ALL assignments (filtering done client-side)
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get student record
     let student = await prisma.student.findUnique({
       where: { userId: session.user.id },
     });
 
-    // If teacher is accessing, create temporary student record
     if (!student && session.user.role === 'TEACHER') {
       student = await prisma.student.create({
         data: { userId: session.user.id },
@@ -28,10 +26,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Student profile not found' }, { status: 404 });
     }
 
-    const { searchParams } = new URL(req.url);
-    const filter = searchParams.get('filter') || 'all';
-
-    // ✅ OPTIMIZED: Only fetch necessary fields, no deep nesting
     const assignments = await prisma.assignmentV2.findMany({
       where: { isPublished: true },
       select: {
@@ -49,10 +43,7 @@ export async function GET(req: NextRequest) {
         teacher: {
           select: {
             user: {
-              select: {
-                name: true,
-                avatar: true,
-              },
+              select: { name: true, avatar: true },
             },
           },
         },
@@ -70,55 +61,36 @@ export async function GET(req: NextRequest) {
           },
         },
         _count: {
-          select: {
-            submissions: true,
-            comments: true,
-          },
+          select: { submissions: true, comments: true },
         },
       },
       orderBy: { dueDate: 'asc' },
     });
 
-    // Process assignments
-    const now = new Date();
-    let processedAssignments = assignments.map((assignment) => {
-      const mySubmission = assignment.submissions[0] || null;
+    const processedAssignments = assignments.map((assignment) => ({
+      id: assignment.id,
+      title: assignment.title,
+      description: assignment.description,
+      subject: assignment.subject,
+      class: assignment.class,
+      dueDate: assignment.dueDate,
+      totalMarks: assignment.totalMarks || 0,
+      fileUrl: assignment.fileUrl,
+      fileName: assignment.fileName,
+      fileSize: assignment.fileSize,
+      createdAt: assignment.createdAt,
+      teacher: {
+        name: assignment.teacher?.user?.name || 'Unknown',
+        avatar: assignment.teacher?.user?.avatar || null,
+      },
+      mySubmission: assignment.submissions[0] ?? null,
+      stats: {
+        totalSubmissions: assignment._count.submissions || 0,
+        totalComments: assignment._count.comments || 0,
+      },
+    }));
 
-      return {
-        id: assignment.id,
-        title: assignment.title,
-        description: assignment.description,
-        subject: assignment.subject,
-        class: assignment.class,
-        dueDate: assignment.dueDate,
-        totalMarks: assignment.totalMarks,
-        fileUrl: assignment.fileUrl,
-        fileName: assignment.fileName,
-        fileSize: assignment.fileSize,
-        createdAt: assignment.createdAt,
-        teacher: {
-          name: assignment.teacher.user.name,
-          avatar: assignment.teacher.user.avatar,
-        },
-        mySubmission,
-        stats: {
-          totalSubmissions: assignment._count.submissions,
-          totalComments: assignment._count.comments,
-        },
-      };
-    });
-
-    // ✅ REMOVED 'overdue' filter completely
-    if (filter === 'pending') {
-      processedAssignments = processedAssignments.filter((a) => !a.mySubmission);
-    } else if (filter === 'submitted') {
-      processedAssignments = processedAssignments.filter((a) => a.mySubmission);
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      assignments: processedAssignments,
-    });
+    return NextResponse.json({ success: true, assignments: processedAssignments });
   } catch (error: any) {
     console.error('Error fetching assignments:', error);
     return NextResponse.json(
@@ -132,7 +104,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -151,8 +122,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Student profile not found' }, { status: 404 });
     }
 
-    const body = await req.json();
-    const { assignmentId, fileUrl, fileName, fileSize, remarks } = body;
+    const { assignmentId, fileUrl, fileName, fileSize, remarks } = await req.json();
 
     if (!assignmentId || !fileUrl || !fileName) {
       return NextResponse.json(
@@ -161,7 +131,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if assignment exists
     const assignment = await prisma.assignmentV2.findUnique({
       where: { id: assignmentId },
     });
@@ -170,13 +139,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Check if already submitted
     const existingSubmission = await prisma.assignmentSubmission.findUnique({
       where: {
-        assignmentId_studentId: {
-          assignmentId,
-          studentId: student.id,
-        },
+        assignmentId_studentId: { assignmentId, studentId: student.id },
       },
     });
 
@@ -187,7 +152,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ✅ Create submission with pending status
     const submission = await prisma.assignmentSubmission.create({
       data: {
         assignmentId,
@@ -215,7 +179,6 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -234,19 +197,14 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Student profile not found' }, { status: 404 });
     }
 
-    const body = await req.json();
-    const { submissionId, isCompleted } = body;
+    const { submissionId, isCompleted } = await req.json();
 
     if (!submissionId) {
       return NextResponse.json({ error: 'Submission ID required' }, { status: 400 });
     }
 
-    // Verify ownership
     const submission = await prisma.assignmentSubmission.findFirst({
-      where: {
-        id: submissionId,
-        studentId: student.id,
-      },
+      where: { id: submissionId, studentId: student.id },
     });
 
     if (!submission) {
@@ -256,7 +214,6 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // ✅ Update submission to completed
     const updatedSubmission = await prisma.assignmentSubmission.update({
       where: { id: submissionId },
       data: {
