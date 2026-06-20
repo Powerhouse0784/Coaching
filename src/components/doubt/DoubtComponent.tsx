@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import {
-  MessageSquare, ThumbsUp, Send, Paperclip, Image as ImageIcon,
-  FileText, X, Filter, Search, Clock, CheckCircle2, Pin, Trash2,
-  AlertCircle, Smile, Book, Users, TrendingUp, Upload, Loader,
+  MessageSquare, ThumbsUp, Send, Image as ImageIcon,
+  FileText, X, Search, Clock, CheckCircle2, Pin, Trash2,
+  Smile, Users, TrendingUp, Upload,
 } from 'lucide-react';
 import { UploadButton } from '@uploadthing/react';
 import type { OurFileRouter } from '@/app/api/uploadthing/core';
@@ -79,19 +79,23 @@ const PRIORITIES = [
 
 export default function StudentDoubtsComponent() {
   const { data: session } = useSession();
-  const [doubts, setDoubts] = useState<Doubt[]>([]);
+
+  // ── Master data fetched once ──
+  const [allDoubts, setAllDoubts] = useState<Doubt[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDoubt, setSelectedDoubt] = useState<Doubt | null>(null);
-  const [showAskModal, setShowAskModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // ── Local filter state — zero API calls ──
   const [filter, setFilter] = useState('all');
   const [subjectFilter, setSubjectFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [selectedDoubtId, setSelectedDoubtId] = useState<string | null>(null);
+  const [showAskModal, setShowAskModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [submittingDoubt, setSubmittingDoubt] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
-  // Dark mode — same MutationObserver pattern as AssignmentCard
   const [darkMode, setDarkMode] = useState(false);
   useEffect(() => {
     const check = () => setDarkMode(document.documentElement.classList.contains('dark'));
@@ -120,19 +124,22 @@ export default function StudentDoubtsComponent() {
     }
   };
 
-  const fetchDoubts = async () => {
+  // ── Fetch ALL doubts once — no filter params sent to API ──
+  const fetchDoubts = useCallback(async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({ filter, subject: subjectFilter, search: searchQuery });
-      const res = await fetch(`/api/doubts?${params}`);
+      const res = await fetch('/api/doubts');
       const data = await res.json();
-      if (data.success) setDoubts(data.doubts);
+      if (data.success) setAllDoubts(data.doubts);
       else showToast('Failed to fetch doubts', 'error');
-    } catch { showToast('Error loading doubts', 'error'); }
-    finally { setLoading(false); }
-  };
+    } catch {
+      showToast('Error loading doubts', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  useEffect(() => { fetchDoubts(); }, [filter, subjectFilter, searchQuery]);
+  useEffect(() => { fetchDoubts(); }, [fetchDoubts]);
 
   useEffect(() => {
     const handle = (e: MouseEvent) => {
@@ -142,6 +149,34 @@ export default function StudentDoubtsComponent() {
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, []);
+
+  // ── All filtering done locally, instantly ──
+  const doubts = useMemo(() => {
+    let list = [...allDoubts];
+
+    if (filter === 'open') list = list.filter((d) => d.status === 'open');
+    else if (filter === 'solved') list = list.filter((d) => d.status === 'solved');
+    else if (filter === 'myDoubts') list = list.filter((d) => d.isMyDoubt);
+    // 'all' shows everything already fetched (server already scoped visibility)
+
+    if (subjectFilter !== 'all') {
+      list = list.filter((d) => d.subject.toLowerCase() === subjectFilter.toLowerCase());
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (d) => d.title.toLowerCase().includes(q) || d.description.toLowerCase().includes(q)
+      );
+    }
+
+    return list;
+  }, [allDoubts, filter, subjectFilter, searchQuery]);
+
+  const selectedDoubt = useMemo(
+    () => allDoubts.find((d) => d.id === selectedDoubtId) ?? null,
+    [allDoubts, selectedDoubtId]
+  );
 
   const handleSubmitDoubt = async () => {
     if (!doubtForm.title || !doubtForm.description || !doubtForm.subject) {
@@ -158,23 +193,57 @@ export default function StudentDoubtsComponent() {
         showToast('Doubt posted successfully!');
         setShowAskModal(false);
         setDoubtForm({ title: '', description: '', subject: '', priority: 'normal', imageUrl: '', imageName: '', pdfUrl: '', pdfName: '' });
-        fetchDoubts();
+        fetchDoubts(); // full refetch only here — a new doubt genuinely changes the list
       } else showToast(data.error || 'Failed to post doubt', 'error');
     } catch { showToast('Error posting doubt', 'error'); }
     finally { setSubmittingDoubt(false); }
   };
 
+  // ── Optimistic upvote — instant, no refetch ──
   const handleUpvoteDoubt = async (doubtId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    setAllDoubts((prev) =>
+      prev.map((d) =>
+        d.id !== doubtId
+          ? d
+          : {
+              ...d,
+              hasUpvoted: !d.hasUpvoted,
+              stats: {
+                ...d.stats,
+                totalUpvotes: d.hasUpvoted ? d.stats.totalUpvotes - 1 : d.stats.totalUpvotes + 1,
+              },
+            }
+      )
+    );
     try {
-      await fetch('/api/doubts', {
+      const res = await fetch('/api/doubts', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ doubtId, action: 'upvote' }),
       });
-      fetchDoubts();
-    } catch { console.error('Error upvoting doubt'); }
+      const data = await res.json();
+      if (!data.success) throw new Error();
+    } catch {
+      // revert on failure
+      setAllDoubts((prev) =>
+        prev.map((d) =>
+          d.id !== doubtId
+            ? d
+            : {
+                ...d,
+                hasUpvoted: !d.hasUpvoted,
+                stats: {
+                  ...d.stats,
+                  totalUpvotes: d.hasUpvoted ? d.stats.totalUpvotes - 1 : d.stats.totalUpvotes + 1,
+                },
+              }
+        )
+      );
+      showToast('Failed to upvote', 'error');
+    }
   };
 
+  // ── Reply submit — patches local state, no full refetch ──
   const handleSubmitReply = async () => {
     if (!replyText.trim() && !replyImage.url && !replyPdf.url) {
       showToast('Please add some content to your reply', 'error'); return;
@@ -193,21 +262,68 @@ export default function StudentDoubtsComponent() {
       const data = await res.json();
       if (data.success) {
         showToast('Reply posted successfully!');
+        const newReply: Reply = {
+          ...data.reply,
+          isMyReply: true,
+          hasUpvoted: false,
+        };
+        setAllDoubts((prev) =>
+          prev.map((d) =>
+            d.id !== selectedDoubt.id
+              ? d
+              : {
+                  ...d,
+                  replies: [newReply, ...d.replies],
+                  stats: { ...d.stats, totalReplies: d.stats.totalReplies + 1 },
+                }
+          )
+        );
         setReplyText(''); setReplyImage({ url: '', name: '' }); setReplyPdf({ url: '', name: '' });
-        fetchDoubts();
       } else showToast(data.error || 'Failed to post reply', 'error');
     } catch { showToast('Error posting reply', 'error'); }
     finally { setSubmittingReply(false); }
   };
 
-  const handleUpvoteReply = async (replyId: string) => {
+  // ── Optimistic reply upvote ──
+  const handleUpvoteReply = async (doubtId: string, replyId: string) => {
+    setAllDoubts((prev) =>
+      prev.map((d) =>
+        d.id !== doubtId
+          ? d
+          : {
+              ...d,
+              replies: d.replies.map((r) =>
+                r.id !== replyId
+                  ? r
+                  : { ...r, hasUpvoted: !r.hasUpvoted, upvotes: r.hasUpvoted ? r.upvotes - 1 : r.upvotes + 1 }
+              ),
+            }
+      )
+    );
     try {
-      await fetch('/api/doubts/reply', {
+      const res = await fetch('/api/doubts/reply', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ replyId }),
       });
-      fetchDoubts();
-    } catch { console.error('Error upvoting reply'); }
+      const data = await res.json();
+      if (!data.success) throw new Error();
+    } catch {
+      setAllDoubts((prev) =>
+        prev.map((d) =>
+          d.id !== doubtId
+            ? d
+            : {
+                ...d,
+                replies: d.replies.map((r) =>
+                  r.id !== replyId
+                    ? r
+                    : { ...r, hasUpvoted: !r.hasUpvoted, upvotes: r.hasUpvoted ? r.upvotes - 1 : r.upvotes + 1 }
+                ),
+              }
+        )
+      );
+      showToast('Failed to upvote reply', 'error');
+    }
   };
 
   const handleDeleteDoubt = async (doubtId: string) => {
@@ -215,18 +331,34 @@ export default function StudentDoubtsComponent() {
     try {
       const res = await fetch(`/api/doubts?id=${doubtId}`, { method: 'DELETE' });
       const data = await res.json();
-      if (data.success) { showToast('Doubt deleted successfully'); setSelectedDoubt(null); setShowDetailModal(false); fetchDoubts(); }
-      else showToast(data.error || 'Failed to delete doubt', 'error');
+      if (data.success) {
+        showToast('Doubt deleted successfully');
+        setSelectedDoubtId(null);
+        setShowDetailModal(false);
+        setAllDoubts((prev) => prev.filter((d) => d.id !== doubtId));
+      } else showToast(data.error || 'Failed to delete doubt', 'error');
     } catch { showToast('Error deleting doubt', 'error'); }
   };
 
-  const handleDeleteReply = async (replyId: string) => {
+  const handleDeleteReply = async (doubtId: string, replyId: string) => {
     if (!confirm('Are you sure you want to delete this reply?')) return;
     try {
       const res = await fetch(`/api/doubts/reply?id=${replyId}`, { method: 'DELETE' });
       const data = await res.json();
-      if (data.success) { showToast('Reply deleted successfully'); fetchDoubts(); }
-      else showToast(data.error || 'Failed to delete reply', 'error');
+      if (data.success) {
+        showToast('Reply deleted successfully');
+        setAllDoubts((prev) =>
+          prev.map((d) =>
+            d.id !== doubtId
+              ? d
+              : {
+                  ...d,
+                  replies: d.replies.filter((r) => r.id !== replyId),
+                  stats: { ...d.stats, totalReplies: d.stats.totalReplies - 1 },
+                }
+          )
+        );
+      } else showToast(data.error || 'Failed to delete reply', 'error');
     } catch { showToast('Error deleting reply', 'error'); }
   };
 
@@ -250,7 +382,6 @@ export default function StudentDoubtsComponent() {
     );
   };
 
-  // Sorted replies
   const sortedReplies = (replies: Reply[]) =>
     [...replies].sort((a, b) => {
       if (a.user.role === 'TEACHER' && b.user.role !== 'TEACHER') return -1;
@@ -260,194 +391,6 @@ export default function StudentDoubtsComponent() {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-  // Reply panel (shared between sidebar and mobile modal)
-  const ReplyPanel = ({ doubt }: { doubt: Doubt }) => (
-    <div className="flex flex-col h-full">
-      {/* Doubt summary */}
-      <div className={`mb-3 sm:mb-4 pb-3 sm:pb-4 border-b-2 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
-        <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2">
-          {getPriorityBadge(doubt.priority, dm)}
-          {doubt.isSolved && (
-            <span className={`flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-semibold border ${dm ? 'bg-green-900/50 text-green-300 border-green-700' : 'bg-green-100 text-green-700 border-green-300'}`}>
-              <CheckCircle2 className="w-3 h-3" /> Solved
-            </span>
-          )}
-        </div>
-        <h4 className={`font-bold text-sm sm:text-base mb-2 ${dm ? 'text-white' : 'text-gray-900'}`}>{doubt.title}</h4>
-        <p className={`text-xs sm:text-sm leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{doubt.description}</p>
-        {doubt.imageUrl && (
-          <div className="mt-3">
-            <Image src={doubt.imageUrl} alt={doubt.imageName || 'Doubt image'} width={400} height={300} className="rounded-xl border w-full object-cover max-h-48" />
-          </div>
-        )}
-        {doubt.pdfUrl && (
-          <a href={doubt.pdfUrl} target="_blank" rel="noopener noreferrer"
-            className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${dm ? 'bg-red-900/40 text-red-300 hover:bg-red-900/60 border border-red-700' : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'}`}>
-            <FileText className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">{doubt.pdfName || 'Download PDF'}</span>
-          </a>
-        )}
-      </div>
-
-      {/* Replies list */}
-      <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-3 mb-3 sm:mb-4 min-h-0">
-        {doubt.replies.length === 0 ? (
-          <div className="text-center py-6 sm:py-8">
-            <MessageSquare className={`w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-3 ${dm ? 'text-gray-600' : 'text-gray-400'}`} />
-            <p className={`text-xs sm:text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>No replies yet. Be the first to help!</p>
-          </div>
-        ) : (
-          sortedReplies(doubt.replies).map((reply) => (
-            <div key={reply.id} className={`p-3 sm:p-4 rounded-xl border-2 ${
-              reply.user.role === 'TEACHER'
-                ? dm ? 'bg-purple-900/30 border-purple-700' : 'bg-purple-50 border-purple-300'
-                : reply.isPinned
-                ? dm ? 'bg-amber-900/30 border-amber-700' : 'bg-amber-50 border-amber-300'
-                : reply.isAccepted
-                ? dm ? 'bg-green-900/30 border-green-700' : 'bg-green-50 border-green-300'
-                : dm ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
-            }`}>
-              <div className="flex items-start gap-2 sm:gap-3 mb-2">
-                <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white text-xs sm:text-sm font-bold flex-shrink-0 ${
-                  reply.user.role === 'TEACHER' ? 'bg-gradient-to-br from-purple-500 to-pink-600' : 'bg-gradient-to-br from-blue-500 to-indigo-600'
-                }`}>
-                  {reply.user.avatar
-                    ? <img src={reply.user.avatar} alt="" className="w-full h-full rounded-full object-cover" />
-                    : reply.user.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 mb-0.5">
-                    <span className={`font-semibold text-xs sm:text-sm ${dm ? 'text-white' : 'text-gray-900'}`}>{reply.user.name}</span>
-                    {reply.user.role === 'TEACHER' && (
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-semibold ${dm ? 'bg-purple-900 text-purple-300' : 'bg-purple-100 text-purple-700'}`}>Teacher</span>
-                    )}
-                    {reply.isPinned && <Pin className="w-3 h-3 text-amber-500" fill="currentColor" />}
-                    {reply.isAccepted && <CheckCircle2 className="w-3 h-3 text-green-500" fill="currentColor" />}
-                  </div>
-                  <p className={`text-[10px] sm:text-xs ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{formatTimeAgo(reply.createdAt)}</p>
-                </div>
-              </div>
-              <p className={`text-xs sm:text-sm whitespace-pre-line mb-2 leading-relaxed ${dm ? 'text-gray-300' : 'text-gray-700'}`}>{reply.content}</p>
-              {reply.imageUrl && (
-                <div className="mb-2">
-                  <Image src={reply.imageUrl} alt={reply.imageName || 'Reply image'} width={300} height={200} className="rounded-lg border w-full object-cover max-h-36" />
-                </div>
-              )}
-              {reply.pdfUrl && (
-                <a href={reply.pdfUrl} target="_blank" rel="noopener noreferrer"
-                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold mb-2 ${dm ? 'bg-red-900/40 text-red-300 border border-red-700' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                  <FileText className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className="truncate">{reply.pdfName || 'Download PDF'}</span>
-                </a>
-              )}
-              <div className="flex items-center gap-3 text-xs">
-                <button onClick={() => handleUpvoteReply(reply.id)}
-                  className={`flex items-center gap-1 transition ${reply.hasUpvoted ? 'text-blue-500 font-semibold' : dm ? 'text-gray-400 hover:text-blue-400' : 'text-gray-600 hover:text-blue-600'}`}>
-                  <ThumbsUp className="w-3.5 h-3.5" fill={reply.hasUpvoted ? 'currentColor' : 'none'} />
-                  <span>{reply.upvotes}</span>
-                </button>
-                {reply.isMyReply && (
-                  <button onClick={() => handleDeleteReply(reply.id)}
-                    className="flex items-center gap-1 text-red-500 hover:text-red-400 ml-auto">
-                    <Trash2 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Delete</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Reply input */}
-      <div className={`border-t-2 pt-2 sm:pt-3 md:pt-4 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
-        {(replyImage.url || replyPdf.url) && (
-          <div className="mb-2 space-y-1.5">
-            {replyImage.url && (
-              <div className={`flex items-center gap-2 p-2 rounded-lg border ${dm ? 'bg-blue-900/30 border-blue-700' : 'bg-blue-50 border-blue-200'}`}>
-                <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 flex-shrink-0" />
-                <span className={`text-xs flex-1 truncate ${dm ? 'text-blue-300' : 'text-blue-800'}`}>{replyImage.name}</span>
-                <button onClick={() => setReplyImage({ url: '', name: '' })} className="text-red-500 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
-              </div>
-            )}
-            {replyPdf.url && (
-              <div className={`flex items-center gap-2 p-2 rounded-lg border ${dm ? 'bg-red-900/30 border-red-700' : 'bg-red-50 border-red-200'}`}>
-                <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 flex-shrink-0" />
-                <span className={`text-xs flex-1 truncate ${dm ? 'text-red-300' : 'text-red-800'}`}>{replyPdf.name}</span>
-                <button onClick={() => setReplyPdf({ url: '', name: '' })} className="text-red-500 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
-              </div>
-            )}
-          </div>
-        )}
-
-        <textarea
-          value={replyText}
-          onChange={(e) => setReplyText(e.target.value)}
-          placeholder="Write your answer..."
-          rows={2}
-          className={`w-full px-3 py-2 sm:py-2.5 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-xs sm:text-sm mb-2 ${
-            dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500' : 'border-gray-300 text-gray-900'
-          }`}
-        />
-
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          {/* Emoji */}
-          <div className="relative" ref={emojiPickerRef}>
-            <button onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              className={`p-2 rounded-lg transition ${dm ? 'text-gray-400 hover:text-blue-400 hover:bg-gray-700' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}
-              title="Add emoji">
-              <Smile className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </button>
-            {showEmojiPicker && (
-              <div className="absolute bottom-10 left-0 z-50">
-                <EmojiPicker onEmojiClick={(e: any) => { setReplyText(replyText + e.emoji); setShowEmojiPicker(false); }} />
-              </div>
-            )}
-          </div>
-
-          {/* Image upload */}
-          <UploadButton<OurFileRouter, "doubtImage">
-            endpoint="doubtImage"
-            onClientUploadComplete={(res: UploadFileResponse[] | undefined) => {
-              if (res?.[0]) { setReplyImage({ url: res[0].url, name: res[0].name }); showToast('Image uploaded!'); }
-            }}
-            onUploadError={(e: Error) => showToast(`Upload failed: ${e.message}`, 'error')}
-            appearance={{
-              button: `p-2 rounded-lg transition-colors text-white bg-blue-600 hover:bg-blue-700`,
-              allowedContent: 'hidden',
-            }}
-            content={{ button: () => <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> }}
-          />
-
-          {/* PDF upload */}
-          <UploadButton<OurFileRouter, "doubtPdf">
-            endpoint="doubtPdf"
-            onClientUploadComplete={(res: UploadFileResponse[] | undefined) => {
-              if (res?.[0]) { setReplyPdf({ url: res[0].url, name: res[0].name }); showToast('PDF uploaded!'); }
-            }}
-            onUploadError={(e: Error) => showToast(`Upload failed: ${e.message}`, 'error')}
-            appearance={{
-              button: `p-2 rounded-lg transition-colors text-white bg-red-600 hover:bg-red-700`,
-              allowedContent: 'hidden',
-            }}
-            content={{ button: () => <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> }}
-          />
-
-          {/* Post reply */}
-          <button
-            onClick={handleSubmitReply}
-            disabled={submittingReply || (!replyText.trim() && !replyImage.url && !replyPdf.url)}
-            className="flex-1 min-w-[80px] px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all"
-          >
-            {submittingReply
-              ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> <span className="hidden xs:inline">Posting...</span></>
-              : <><Send className="w-3.5 h-3.5" /> Post</>}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Main render
   return (
     <div className={`min-h-screen transition-colors ${dm ? 'bg-gray-900' : 'bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'}`}>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 md:py-8">
@@ -474,10 +417,10 @@ export default function StudentDoubtsComponent() {
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-5 md:mb-6">
             {[
-              { icon: MessageSquare, label: 'Total', value: doubts.length, lightCls: 'from-blue-50 to-blue-100 text-blue-700', darkCls: 'from-blue-900/40 to-blue-900/20 text-blue-300', valCls: dm ? 'text-blue-200' : 'text-blue-900' },
-              { icon: CheckCircle2, label: 'Solved', value: doubts.filter(d => d.isSolved).length, lightCls: 'from-green-50 to-green-100 text-green-700', darkCls: 'from-green-900/40 to-green-900/20 text-green-300', valCls: dm ? 'text-green-200' : 'text-green-900' },
-              { icon: Users, label: 'My Doubts', value: doubts.filter(d => d.isMyDoubt).length, lightCls: 'from-orange-50 to-orange-100 text-orange-700', darkCls: 'from-orange-900/40 to-orange-900/20 text-orange-300', valCls: dm ? 'text-orange-200' : 'text-orange-900' },
-              { icon: TrendingUp, label: 'Active', value: doubts.filter(d => !d.isSolved).length, lightCls: 'from-purple-50 to-purple-100 text-purple-700', darkCls: 'from-purple-900/40 to-purple-900/20 text-purple-300', valCls: dm ? 'text-purple-200' : 'text-purple-900' },
+              { icon: MessageSquare, label: 'Total', value: allDoubts.length, lightCls: 'from-blue-50 to-blue-100 text-blue-700', darkCls: 'from-blue-900/40 to-blue-900/20 text-blue-300', valCls: dm ? 'text-blue-200' : 'text-blue-900' },
+              { icon: CheckCircle2, label: 'Solved', value: allDoubts.filter(d => d.isSolved).length, lightCls: 'from-green-50 to-green-100 text-green-700', darkCls: 'from-green-900/40 to-green-900/20 text-green-300', valCls: dm ? 'text-green-200' : 'text-green-900' },
+              { icon: Users, label: 'My Doubts', value: allDoubts.filter(d => d.isMyDoubt).length, lightCls: 'from-orange-50 to-orange-100 text-orange-700', darkCls: 'from-orange-900/40 to-orange-900/20 text-orange-300', valCls: dm ? 'text-orange-200' : 'text-orange-900' },
+              { icon: TrendingUp, label: 'Active', value: allDoubts.filter(d => !d.isSolved).length, lightCls: 'from-purple-50 to-purple-100 text-purple-700', darkCls: 'from-purple-900/40 to-purple-900/20 text-purple-300', valCls: dm ? 'text-purple-200' : 'text-purple-900' },
             ].map(({ icon: Icon, label, value, lightCls, darkCls, valCls }, i) => (
               <div key={i} className={`bg-gradient-to-br ${dm ? darkCls : lightCls} p-2.5 sm:p-3 md:p-4 rounded-xl border ${dm ? 'border-gray-700' : 'border-transparent'}`}>
                 <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 mb-1">
@@ -551,17 +494,16 @@ export default function StudentDoubtsComponent() {
                 <div
                   key={doubt.id}
                   onClick={() => {
-                    setSelectedDoubt(doubt);
+                    setSelectedDoubtId(doubt.id);
                     setShowDetailModal(true);
                   }}
                   className={`rounded-xl sm:rounded-2xl border-2 p-3 sm:p-4 md:p-5 lg:p-6 cursor-pointer hover:shadow-xl transition-all ${
-                    selectedDoubt?.id === doubt.id
+                    selectedDoubtId === doubt.id
                       ? dm ? 'border-blue-500 ring-2 ring-blue-500/30 bg-gray-800' : 'border-blue-500 ring-4 ring-blue-100 bg-white'
                       : dm ? 'bg-gray-800 border-gray-700 hover:border-blue-600' : 'bg-white border-gray-200 hover:border-blue-200'
                   }`}
                 >
                   <div className="flex items-start gap-2.5 sm:gap-3 md:gap-4">
-                    {/* Avatar */}
                     <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm sm:text-base md:text-lg flex-shrink-0 shadow-md">
                       {doubt.student.avatar
                         ? <img src={doubt.student.avatar} alt="" className="w-full h-full rounded-full object-cover" />
@@ -569,7 +511,6 @@ export default function StudentDoubtsComponent() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      {/* Header row */}
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex-1 min-w-0">
                           <h3 className={`font-bold text-sm sm:text-base md:text-lg lg:text-xl mb-1 truncate ${dm ? 'text-white' : 'text-gray-900'}`}>{doubt.title}</h3>
@@ -649,14 +590,34 @@ export default function StudentDoubtsComponent() {
                 <div className={`flex items-center justify-between pb-3 border-b-2 flex-shrink-0 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
                   <h3 className={`font-bold text-base ${dm ? 'text-white' : 'text-gray-900'}`}>Replies ({selectedDoubt.replies.length})</h3>
                   <button
-                    onClick={() => setSelectedDoubt(null)}
+                    onClick={() => setSelectedDoubtId(null)}
                     className={`p-1.5 rounded-lg transition ${dm ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto min-h-0 mt-3">
-                  <ReplyPanel doubt={selectedDoubt} />
+                  <ReplyPanel
+                    doubt={selectedDoubt}
+                    dm={dm}
+                    sortedReplies={sortedReplies}
+                    formatTimeAgo={formatTimeAgo}
+                    getPriorityBadge={getPriorityBadge}
+                    replyText={replyText}
+                    setReplyText={setReplyText}
+                    replyImage={replyImage}
+                    setReplyImage={setReplyImage}
+                    replyPdf={replyPdf}
+                    setReplyPdf={setReplyPdf}
+                    submittingReply={submittingReply}
+                    handleSubmitReply={handleSubmitReply}
+                    handleUpvoteReply={handleUpvoteReply}
+                    handleDeleteReply={handleDeleteReply}
+                    showEmojiPicker={showEmojiPicker}
+                    setShowEmojiPicker={setShowEmojiPicker}
+                    emojiPickerRef={emojiPickerRef}
+                    showToast={showToast}
+                  />
                 </div>
               </div>
             ) : (
@@ -681,7 +642,27 @@ export default function StudentDoubtsComponent() {
               </button>
             </div>
             <div className="p-4 flex-1 overflow-hidden flex flex-col min-h-0">
-              <ReplyPanel doubt={selectedDoubt} />
+              <ReplyPanel
+                doubt={selectedDoubt}
+                dm={dm}
+                sortedReplies={sortedReplies}
+                formatTimeAgo={formatTimeAgo}
+                getPriorityBadge={getPriorityBadge}
+                replyText={replyText}
+                setReplyText={setReplyText}
+                replyImage={replyImage}
+                setReplyImage={setReplyImage}
+                replyPdf={replyPdf}
+                setReplyPdf={setReplyPdf}
+                submittingReply={submittingReply}
+                handleSubmitReply={handleSubmitReply}
+                handleUpvoteReply={handleUpvoteReply}
+                handleDeleteReply={handleDeleteReply}
+                showEmojiPicker={showEmojiPicker}
+                setShowEmojiPicker={setShowEmojiPicker}
+                emojiPickerRef={emojiPickerRef}
+                showToast={showToast}
+              />
             </div>
           </div>
         </div>
@@ -853,6 +834,226 @@ export default function StudentDoubtsComponent() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── ReplyPanel — pulled OUT as its own top-level component ───────────────────
+// This is the critical fix for "refreshes on every keystroke while replying":
+// when ReplyPanel was defined INSIDE the parent function, React treated it as a
+// brand-new component type on every parent re-render (e.g. after an upvote or
+// fetch), unmounting and remounting it — which kills textarea focus and makes
+// typing feel like it "loses" each keystroke. As a top-level component it now
+// persists across parent re-renders.
+function ReplyPanel({
+  doubt, dm, sortedReplies, formatTimeAgo, getPriorityBadge,
+  replyText, setReplyText, replyImage, setReplyImage, replyPdf, setReplyPdf,
+  submittingReply, handleSubmitReply, handleUpvoteReply, handleDeleteReply,
+  showEmojiPicker, setShowEmojiPicker, emojiPickerRef, showToast,
+}: {
+  doubt: Doubt;
+  dm: boolean;
+  sortedReplies: (r: Reply[]) => Reply[];
+  formatTimeAgo: (d: string) => string;
+  getPriorityBadge: (p: string, dark: boolean) => React.ReactNode;
+  replyText: string;
+  setReplyText: (v: string) => void;
+  replyImage: { url: string; name: string };
+  setReplyImage: (v: { url: string; name: string }) => void;
+  replyPdf: { url: string; name: string };
+  setReplyPdf: (v: { url: string; name: string }) => void;
+  submittingReply: boolean;
+  handleSubmitReply: () => void;
+  handleUpvoteReply: (doubtId: string, replyId: string) => void;
+  handleDeleteReply: (doubtId: string, replyId: string) => void;
+  showEmojiPicker: boolean;
+  setShowEmojiPicker: (v: boolean | ((p: boolean) => boolean)) => void;
+  emojiPickerRef: React.RefObject<HTMLDivElement | null>;
+  showToast: (msg: string, type?: 'success' | 'error') => void;
+}) {
+  return (
+    <div className="flex flex-col h-full">
+      {/* Doubt summary */}
+      <div className={`mb-3 sm:mb-4 pb-3 sm:pb-4 border-b-2 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2">
+          {getPriorityBadge(doubt.priority, dm)}
+          {doubt.isSolved && (
+            <span className={`flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-semibold border ${dm ? 'bg-green-900/50 text-green-300 border-green-700' : 'bg-green-100 text-green-700 border-green-300'}`}>
+              <CheckCircle2 className="w-3 h-3" /> Solved
+            </span>
+          )}
+        </div>
+        <h4 className={`font-bold text-sm sm:text-base mb-2 ${dm ? 'text-white' : 'text-gray-900'}`}>{doubt.title}</h4>
+        <p className={`text-xs sm:text-sm leading-relaxed ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{doubt.description}</p>
+        {doubt.imageUrl && (
+          <div className="mt-3">
+            <Image src={doubt.imageUrl} alt={doubt.imageName || 'Doubt image'} width={400} height={300} className="rounded-xl border w-full object-cover max-h-48" />
+          </div>
+        )}
+        {doubt.pdfUrl && (
+          <a href={doubt.pdfUrl} target="_blank" rel="noopener noreferrer"
+            className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${dm ? 'bg-red-900/40 text-red-300 hover:bg-red-900/60 border border-red-700' : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'}`}>
+            <FileText className="w-4 h-4 flex-shrink-0" />
+            <span className="truncate">{doubt.pdfName || 'Download PDF'}</span>
+          </a>
+        )}
+      </div>
+
+      {/* Replies list */}
+      <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-3 mb-3 sm:mb-4 min-h-0">
+        {doubt.replies.length === 0 ? (
+          <div className="text-center py-6 sm:py-8">
+            <MessageSquare className={`w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-3 ${dm ? 'text-gray-600' : 'text-gray-400'}`} />
+            <p className={`text-xs sm:text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>No replies yet. Be the first to help!</p>
+          </div>
+        ) : (
+          sortedReplies(doubt.replies).map((reply) => (
+            <div key={reply.id} className={`p-3 sm:p-4 rounded-xl border-2 ${
+              reply.user.role === 'TEACHER'
+                ? dm ? 'bg-purple-900/30 border-purple-700' : 'bg-purple-50 border-purple-300'
+                : reply.isPinned
+                ? dm ? 'bg-amber-900/30 border-amber-700' : 'bg-amber-50 border-amber-300'
+                : reply.isAccepted
+                ? dm ? 'bg-green-900/30 border-green-700' : 'bg-green-50 border-green-300'
+                : dm ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+            }`}>
+              <div className="flex items-start gap-2 sm:gap-3 mb-2">
+                <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white text-xs sm:text-sm font-bold flex-shrink-0 ${
+                  reply.user.role === 'TEACHER' ? 'bg-gradient-to-br from-purple-500 to-pink-600' : 'bg-gradient-to-br from-blue-500 to-indigo-600'
+                }`}>
+                  {reply.user.avatar
+                    ? <img src={reply.user.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                    : reply.user.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 mb-0.5">
+                    <span className={`font-semibold text-xs sm:text-sm ${dm ? 'text-white' : 'text-gray-900'}`}>{reply.user.name}</span>
+                    {reply.user.role === 'TEACHER' && (
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-semibold ${dm ? 'bg-purple-900 text-purple-300' : 'bg-purple-100 text-purple-700'}`}>Teacher</span>
+                    )}
+                    {reply.isPinned && <Pin className="w-3 h-3 text-amber-500" fill="currentColor" />}
+                    {reply.isAccepted && <CheckCircle2 className="w-3 h-3 text-green-500" fill="currentColor" />}
+                  </div>
+                  <p className={`text-[10px] sm:text-xs ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{formatTimeAgo(reply.createdAt)}</p>
+                </div>
+              </div>
+              <p className={`text-xs sm:text-sm whitespace-pre-line mb-2 leading-relaxed ${dm ? 'text-gray-300' : 'text-gray-700'}`}>{reply.content}</p>
+              {reply.imageUrl && (
+                <div className="mb-2">
+                  <Image src={reply.imageUrl} alt={reply.imageName || 'Reply image'} width={300} height={200} className="rounded-lg border w-full object-cover max-h-36" />
+                </div>
+              )}
+              {reply.pdfUrl && (
+                <a href={reply.pdfUrl} target="_blank" rel="noopener noreferrer"
+                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold mb-2 ${dm ? 'bg-red-900/40 text-red-300 border border-red-700' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                  <FileText className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="truncate">{reply.pdfName || 'Download PDF'}</span>
+                </a>
+              )}
+              <div className="flex items-center gap-3 text-xs">
+                <button onClick={() => handleUpvoteReply(doubt.id, reply.id)}
+                  className={`flex items-center gap-1 transition ${reply.hasUpvoted ? 'text-blue-500 font-semibold' : dm ? 'text-gray-400 hover:text-blue-400' : 'text-gray-600 hover:text-blue-600'}`}>
+                  <ThumbsUp className="w-3.5 h-3.5" fill={reply.hasUpvoted ? 'currentColor' : 'none'} />
+                  <span>{reply.upvotes}</span>
+                </button>
+                {reply.isMyReply && (
+                  <button onClick={() => handleDeleteReply(doubt.id, reply.id)}
+                    className="flex items-center gap-1 text-red-500 hover:text-red-400 ml-auto">
+                    <Trash2 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Delete</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Reply input */}
+      <div className={`border-t-2 pt-2 sm:pt-3 md:pt-4 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+        {(replyImage.url || replyPdf.url) && (
+          <div className="mb-2 space-y-1.5">
+            {replyImage.url && (
+              <div className={`flex items-center gap-2 p-2 rounded-lg border ${dm ? 'bg-blue-900/30 border-blue-700' : 'bg-blue-50 border-blue-200'}`}>
+                <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 flex-shrink-0" />
+                <span className={`text-xs flex-1 truncate ${dm ? 'text-blue-300' : 'text-blue-800'}`}>{replyImage.name}</span>
+                <button onClick={() => setReplyImage({ url: '', name: '' })} className="text-red-500 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            )}
+            {replyPdf.url && (
+              <div className={`flex items-center gap-2 p-2 rounded-lg border ${dm ? 'bg-red-900/30 border-red-700' : 'bg-red-50 border-red-200'}`}>
+                <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 flex-shrink-0" />
+                <span className={`text-xs flex-1 truncate ${dm ? 'text-red-300' : 'text-red-800'}`}>{replyPdf.name}</span>
+                <button onClick={() => setReplyPdf({ url: '', name: '' })} className="text-red-500 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <textarea
+          value={replyText}
+          onChange={(e) => setReplyText(e.target.value)}
+          placeholder="Write your answer..."
+          rows={2}
+          className={`w-full px-3 py-2 sm:py-2.5 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-xs sm:text-sm mb-2 ${
+            dm ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500' : 'border-gray-300 text-gray-900'
+          }`}
+        />
+
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          {/* Emoji */}
+          <div className="relative" ref={emojiPickerRef}>
+            <button onClick={() => setShowEmojiPicker((s) => !s)}
+              className={`p-2 rounded-lg transition ${dm ? 'text-gray-400 hover:text-blue-400 hover:bg-gray-700' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}
+              title="Add emoji">
+              <Smile className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+            {showEmojiPicker && (
+              <div className="absolute bottom-10 left-0 z-50">
+                <EmojiPicker onEmojiClick={(e: any) => { setReplyText(replyText + e.emoji); setShowEmojiPicker(false); }} />
+              </div>
+            )}
+          </div>
+
+          {/* Image upload */}
+          <UploadButton<OurFileRouter, "doubtImage">
+            endpoint="doubtImage"
+            onClientUploadComplete={(res: UploadFileResponse[] | undefined) => {
+              if (res?.[0]) { setReplyImage({ url: res[0].url, name: res[0].name }); showToast('Image uploaded!'); }
+            }}
+            onUploadError={(e: Error) => showToast(`Upload failed: ${e.message}`, 'error')}
+            appearance={{
+              button: `p-2 rounded-lg transition-colors text-white bg-blue-600 hover:bg-blue-700`,
+              allowedContent: 'hidden',
+            }}
+            content={{ button: () => <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> }}
+          />
+
+          {/* PDF upload */}
+          <UploadButton<OurFileRouter, "doubtPdf">
+            endpoint="doubtPdf"
+            onClientUploadComplete={(res: UploadFileResponse[] | undefined) => {
+              if (res?.[0]) { setReplyPdf({ url: res[0].url, name: res[0].name }); showToast('PDF uploaded!'); }
+            }}
+            onUploadError={(e: Error) => showToast(`Upload failed: ${e.message}`, 'error')}
+            appearance={{
+              button: `p-2 rounded-lg transition-colors text-white bg-red-600 hover:bg-red-700`,
+              allowedContent: 'hidden',
+            }}
+            content={{ button: () => <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> }}
+          />
+
+          {/* Post reply */}
+          <button
+            onClick={handleSubmitReply}
+            disabled={submittingReply || (!replyText.trim() && !replyImage.url && !replyPdf.url)}
+            className="flex-1 min-w-[80px] px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all"
+          >
+            {submittingReply
+              ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> <span className="hidden xs:inline">Posting...</span></>
+              : <><Send className="w-3.5 h-3.5" /> Post</>}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

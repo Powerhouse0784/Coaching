@@ -3,54 +3,24 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 
-// GET - Fetch all doubts (with filters)
+// GET - Fetch ALL doubts visible to this user (filtering done client-side)
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { searchParams } = new URL(req.url);
-    const filter = searchParams.get('filter') || 'all';
-    const subject = searchParams.get('subject') || 'all';
-    const search = searchParams.get('search') || '';
 
     const student = await prisma.student.findUnique({
       where: { userId: session.user.id },
     });
 
-    const where: any = {};
-
-    // Filter by status
-    if (filter === 'open') {
-      where.status = 'open';
-    } else if (filter === 'solved') {
-      where.status = 'solved';
-    } else if (filter === 'myDoubts' && student) {
-      where.studentId = student.id;
-    } else if (filter === 'all') {
-      if (!student) {
-        where.status = 'open';
-      } else {
-        where.OR = [
-          { status: 'open' },
-          { AND: [{ status: 'solved' }, { studentId: student.id }] }
-        ];
-      }
-    }
-
-    if (subject !== 'all') {
-      where.subject = subject;
-    }
-
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+    // Visibility rule unchanged: everyone sees open doubts;
+    // a student additionally sees their own solved doubts.
+    const where: any = student
+      ? { OR: [{ status: 'open' }, { AND: [{ status: 'solved' }, { studentId: student.id }] }] }
+      : { status: 'open' };
 
     const doubts = await prisma.doubt.findMany({
       where,
@@ -58,12 +28,7 @@ export async function GET(req: NextRequest) {
         student: {
           include: {
             user: {
-              select: {
-                id: true,
-                name: true,
-                avatar: true,
-                email: true,
-              },
+              select: { id: true, name: true, avatar: true, email: true },
             },
           },
         },
@@ -72,34 +37,22 @@ export async function GET(req: NextRequest) {
           select: { id: true },
         },
         _count: {
-          select: {
-            replies: true,
-            upvotedBy: true,
-          },
+          select: { replies: true, upvotedBy: true },
         },
         replies: {
           include: {
             user: {
-              select: {
-                id: true,
-                name: true,
-                avatar: true,
-                role: true,
-              },
+              select: { id: true, name: true, avatar: true, role: true },
             },
             upvotedBy: {
               where: { userId: session.user.id },
               select: { id: true },
             },
           },
-          orderBy: {
-            isPinned: 'desc',
-          },
+          orderBy: { isPinned: 'desc' },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     });
 
     const processedDoubts = doubts.map((doubt) => ({
@@ -148,11 +101,10 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - Create new doubt
+// POST, PATCH, DELETE — unchanged from your original
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -191,13 +143,7 @@ export async function POST(req: NextRequest) {
       include: {
         student: {
           include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                avatar: true,
-              },
-            },
+            user: { select: { id: true, name: true, avatar: true } },
           },
         },
       },
@@ -213,11 +159,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH - Update doubt (mark as solved, etc.)
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -237,113 +181,51 @@ export async function PATCH(req: NextRequest) {
       where: { userId: session.user.id },
     });
 
-    // UPVOTE DOUBT
     if (action === 'upvote') {
       const existingUpvote = await prisma.doubtUpvote.findUnique({
-        where: {
-          doubtId_userId: {
-            doubtId,
-            userId: session.user.id,
-          },
-        },
+        where: { doubtId_userId: { doubtId, userId: session.user.id } },
       });
 
       if (existingUpvote) {
-        await prisma.doubtUpvote.delete({
-          where: { id: existingUpvote.id },
-        });
-
-        await prisma.doubt.update({
-          where: { id: doubtId },
-          data: { upvotes: { decrement: 1 } },
-        });
-
+        await prisma.doubtUpvote.delete({ where: { id: existingUpvote.id } });
+        await prisma.doubt.update({ where: { id: doubtId }, data: { upvotes: { decrement: 1 } } });
         return NextResponse.json({ success: true, action: 'removed' });
       } else {
-        await prisma.doubtUpvote.create({
-          data: {
-            doubtId,
-            userId: session.user.id,
-          },
-        });
-
-        await prisma.doubt.update({
-          where: { id: doubtId },
-          data: { upvotes: { increment: 1 } },
-        });
-
+        await prisma.doubtUpvote.create({ data: { doubtId, userId: session.user.id } });
+        await prisma.doubt.update({ where: { id: doubtId }, data: { upvotes: { increment: 1 } } });
         return NextResponse.json({ success: true, action: 'added' });
       }
     }
 
-    // SOLVE DOUBT
     if (action === 'solve') {
-      const doubt = await prisma.doubt.findUnique({
-        where: { id: doubtId },
-      });
-
-      if (!doubt) {
-        return NextResponse.json({ error: 'Doubt not found' }, { status: 404 });
-      }
+      const doubt = await prisma.doubt.findUnique({ where: { id: doubtId } });
+      if (!doubt) return NextResponse.json({ error: 'Doubt not found' }, { status: 404 });
 
       const isOwner = student && doubt.studentId === student.id;
       const isTeacher = teacher && session.user.role === 'TEACHER';
-
-      if (!isOwner && !isTeacher) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-      }
+      if (!isOwner && !isTeacher) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
       const updatedDoubt = await prisma.doubt.update({
         where: { id: doubtId },
-        data: {
-          status: 'solved',
-          isSolved: true,
-          solvedAt: new Date(),
-        },
+        data: { status: 'solved', isSolved: true, solvedAt: new Date() },
       });
-
       return NextResponse.json({ success: true, doubt: updatedDoubt });
     }
 
-    // PIN REPLY (Teacher only)
     if (action === 'pin' && replyId) {
-      if (!teacher) {
-        return NextResponse.json({ error: 'Only teachers can pin replies' }, { status: 403 });
-      }
-
-      await prisma.doubtReply.updateMany({
-        where: { doubtId },
-        data: { isPinned: false },
-      });
-
-      const reply = await prisma.doubtReply.update({
-        where: { id: replyId },
-        data: { isPinned: true },
-      });
-
+      if (!teacher) return NextResponse.json({ error: 'Only teachers can pin replies' }, { status: 403 });
+      await prisma.doubtReply.updateMany({ where: { doubtId }, data: { isPinned: false } });
+      const reply = await prisma.doubtReply.update({ where: { id: replyId }, data: { isPinned: true } });
       return NextResponse.json({ success: true, reply });
     }
 
-    // ACCEPT REPLY (Student who posted doubt only)
     if (action === 'accept' && replyId) {
-      const doubt = await prisma.doubt.findUnique({
-        where: { id: doubtId },
-      });
-
+      const doubt = await prisma.doubt.findUnique({ where: { id: doubtId } });
       if (!doubt || !student || doubt.studentId !== student.id) {
         return NextResponse.json({ error: 'Only doubt owner can accept replies' }, { status: 403 });
       }
-
-      await prisma.doubtReply.updateMany({
-        where: { doubtId },
-        data: { isAccepted: false },
-      });
-
-      const reply = await prisma.doubtReply.update({
-        where: { id: replyId },
-        data: { isAccepted: true },
-      });
-
+      await prisma.doubtReply.updateMany({ where: { doubtId }, data: { isAccepted: false } });
+      const reply = await prisma.doubtReply.update({ where: { id: replyId }, data: { isAccepted: true } });
       return NextResponse.json({ success: true, reply });
     }
 
@@ -357,44 +239,28 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// DELETE - Delete doubt
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
     const doubtId = searchParams.get('id');
-
-    if (!doubtId) {
-      return NextResponse.json({ error: 'Doubt ID required' }, { status: 400 });
-    }
+    if (!doubtId) return NextResponse.json({ error: 'Doubt ID required' }, { status: 400 });
 
     const doubt = await prisma.doubt.findUnique({
       where: { id: doubtId },
-      include: {
-        student: true,
-      },
+      include: { student: true },
     });
-
-    if (!doubt) {
-      return NextResponse.json({ error: 'Doubt not found' }, { status: 404 });
-    }
+    if (!doubt) return NextResponse.json({ error: 'Doubt not found' }, { status: 404 });
 
     const isOwner = doubt.student.userId === session.user.id;
     const isTeacher = session.user.role === 'TEACHER';
+    if (!isOwner && !isTeacher) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
-    if (!isOwner && !isTeacher) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    await prisma.doubt.delete({
-      where: { id: doubtId },
-    });
-
+    await prisma.doubt.delete({ where: { id: doubtId } });
     return NextResponse.json({ success: true, message: 'Doubt deleted successfully' });
   } catch (error: any) {
     console.error('Error deleting doubt:', error);
