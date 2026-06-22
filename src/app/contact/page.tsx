@@ -296,7 +296,7 @@ export default function ContactPage() {
                     <input
                       type="text" name="name" value={formData.name} onChange={handleChange} required
                       className={`w-full px-4 py-3 rounded-lg border-2 ${darkMode ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-indigo-500' : 'bg-white border-gray-300 text-gray-900 focus:border-indigo-500'} focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all duration-300`}
-                      placeholder="John Doe"
+                      placeholder="Vivek Kumar Jha"
                     />
                   </div>
                   <div>
@@ -306,7 +306,7 @@ export default function ContactPage() {
                     <input
                       type="email" name="email" value={formData.email} onChange={handleChange} required
                       className={`w-full px-4 py-3 rounded-lg border-2 ${darkMode ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-indigo-500' : 'bg-white border-gray-300 text-gray-900 focus:border-indigo-500'} focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all duration-300`}
-                      placeholder="john@example.com"
+                      placeholder="Vivek123@example.com"
                     />
                   </div>
                 </div>

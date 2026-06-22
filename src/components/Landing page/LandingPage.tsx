@@ -401,7 +401,7 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void;
             )}
 
             {[
-              { field: 'name',  label: 'Full Name',     type: 'text',  placeholder: 'John Doe',       icon: UserIcon },
+              { field: 'name',  label: 'Full Name',     type: 'text',  placeholder: 'Vivek Kumar Jha',       icon: UserIcon },
               { field: 'email', label: 'Email Address', type: 'email', placeholder: 'you@example.com', icon: Mail    },
             ].map(({ field, label, type, placeholder, icon: Icon }) => (
               <div key={field}>

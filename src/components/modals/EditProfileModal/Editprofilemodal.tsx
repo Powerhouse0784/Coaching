@@ -272,7 +272,7 @@ export default function EditProfileModal({ isOpen, onClose, userProfile, onUpdat
                           ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-indigo-500' 
                           : 'bg-white border-gray-300 text-gray-900 focus:border-indigo-500'
                       } focus:outline-none focus:ring-2 focus:ring-indigo-500/20`}
-                      placeholder="John Doe"
+                      placeholder="Vivek Kumar Jha"
                     />
                   </div>
 
@@ -294,7 +294,7 @@ export default function EditProfileModal({ isOpen, onClose, userProfile, onUpdat
                           ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-indigo-500' 
                           : 'bg-white border-gray-300 text-gray-900 focus:border-indigo-500'
                       } focus:outline-none focus:ring-2 focus:ring-indigo-500/20`}
-                      placeholder="john@example.com"
+                      placeholder="Vivek@example.com"
                     />
                   </div>
 
