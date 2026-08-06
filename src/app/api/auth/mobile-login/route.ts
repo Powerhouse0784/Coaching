@@ -40,10 +40,10 @@ export async function POST(req: NextRequest) {
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role: user.role, name: user.name },
       process.env.NEXTAUTH_SECRET!,
       { expiresIn: "30d" }
-    )
+    ) 
 
     return NextResponse.json({
       token,
