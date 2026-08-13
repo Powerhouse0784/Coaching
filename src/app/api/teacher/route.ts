@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { getSessionUser } from "@/lib/getSessionUser";
 
 const YT_KEY = process.env.YOUTUBE_API_KEY!;
 const YT_CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID!;
@@ -127,9 +128,9 @@ async function syncChannel(folderId: string, uploadsPlaylistId: string) {
 }
 
 // GET — status info for the dashboard widget
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSessionUser(request);
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if ((session.user as any).role !== 'TEACHER') return NextResponse.json({ error: 'Teachers only' }, { status: 403 });
     if (!YT_CHANNEL_ID) return NextResponse.json({ error: 'YOUTUBE_CHANNEL_ID not set in .env' }, { status: 500 });
@@ -178,9 +179,9 @@ export async function GET(req: NextRequest) {
 }
 
 // POST — run the sync
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSessionUser(request);
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if ((session.user as any).role !== 'TEACHER') return NextResponse.json({ error: 'Teachers only' }, { status: 403 });
     if (!YT_KEY) return NextResponse.json({ error: 'YOUTUBE_API_KEY not set in .env' }, { status: 500 });
