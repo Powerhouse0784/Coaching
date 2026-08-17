@@ -128,9 +128,9 @@ async function syncChannel(folderId: string, uploadsPlaylistId: string) {
 }
 
 // GET — status info for the dashboard widget
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const session = await getSessionUser(request);
+    const session = await getSessionUser(req);
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if ((session.user as any).role !== 'TEACHER') return NextResponse.json({ error: 'Teachers only' }, { status: 403 });
     if (!YT_CHANNEL_ID) return NextResponse.json({ error: 'YOUTUBE_CHANNEL_ID not set in .env' }, { status: 500 });
@@ -179,9 +179,9 @@ export async function GET(request: NextRequest) {
 }
 
 // POST — run the sync
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const session = await getSessionUser(request);
+    const session = await getSessionUser(req);
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if ((session.user as any).role !== 'TEACHER') return NextResponse.json({ error: 'Teachers only' }, { status: 403 });
     if (!YT_KEY) return NextResponse.json({ error: 'YOUTUBE_API_KEY not set in .env' }, { status: 500 });

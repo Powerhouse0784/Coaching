@@ -19,9 +19,9 @@ function parseDurationToSecs(dur: string): number {
   return 0;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const session = await getSessionUser(request);
+    const session = await getSessionUser(req);
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if ((session.user as any).role !== 'TEACHER') return NextResponse.json({ error: 'Teachers only' }, { status: 403 });
 
@@ -88,16 +88,16 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const session = await getSessionUser(request);
+    const session = await getSessionUser(req);
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if ((session.user as any).role !== 'TEACHER') return NextResponse.json({ error: 'Teachers only' }, { status: 403 });
 
     const teacher = await prisma.teacher.findUnique({ where: { userId: session.user.id } });
     if (!teacher) return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 });
 
-    const body = await request.json();
+    const body = await req.json();
     const { name, subject, class: classValue, chapter, description, isPublic, thumbnailUrl } = body;
     if (!name || !subject || !classValue || !chapter) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
 
