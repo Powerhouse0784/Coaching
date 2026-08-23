@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { getSessionUser } from "@/lib/getSessionUser";
 
 // GET - Fetch all chat messages (teachers only)
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSessionUser(req);
     
     if (!session?.user || session.user.role !== 'TEACHER') {
       return NextResponse.json({ error: 'Unauthorized - Teachers only' }, { status: 401 });
@@ -75,7 +76,7 @@ export async function PUT(req: NextRequest) {
 // POST - Send new message
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSessionUser(req);
     
     if (!session?.user || session.user.role !== 'TEACHER') {
       return NextResponse.json({ error: 'Unauthorized - Teachers only' }, { status: 401 });
@@ -131,7 +132,7 @@ export async function POST(req: NextRequest) {
 // PATCH - Mark messages as read
 export async function PATCH(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSessionUser(req);
     
     if (!session?.user || session.user.role !== 'TEACHER') {
       return NextResponse.json({ error: 'Unauthorized - Teachers only' }, { status: 401 });
@@ -171,7 +172,7 @@ export async function PATCH(req: NextRequest) {
 // DELETE - Delete message (own messages only)
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSessionUser(req);
     
     if (!session?.user || session.user.role !== 'TEACHER') {
       return NextResponse.json({ error: 'Unauthorized - Teachers only' }, { status: 401 });
