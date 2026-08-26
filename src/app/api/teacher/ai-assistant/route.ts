@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import Groq from 'groq-sdk';
+import { getSessionUser } from "@/lib/getSessionUser";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -11,7 +12,7 @@ const groq = new Groq({
 // GET - Fetch all AI chat messages for the teacher
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSessionUser(req);
     
     if (!session?.user || session.user.role !== 'TEACHER') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
 // POST - Send a message and get AI response
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSessionUser(req);
     
     if (!session?.user || session.user.role !== 'TEACHER') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -169,7 +170,7 @@ Always maintain a supportive, encouraging tone that empowers teachers to be thei
 // DELETE - Clear AI chat history
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSessionUser(req);
     
     if (!session?.user || session.user.role !== 'TEACHER') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
