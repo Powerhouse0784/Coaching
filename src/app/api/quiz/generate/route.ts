@@ -191,7 +191,7 @@ Generate ${numQuestions} questions now in valid JSON format:`;
           content: prompt
         }
       ],
-      model: 'llama-3.1-8b-instant',
+      model: 'openai/gpt-oss-120b',
       temperature: 0.7, // Lower for more consistent JSON formatting
       max_tokens: 8000,
       response_format: { type: 'json_object' }
@@ -254,7 +254,7 @@ Generate ${numQuestions} questions now in valid JSON format:`;
         questions: quizData.questions,
         metadata: {
           generatedAt: new Date().toISOString(),
-          model: 'llama-3.1-8b-instant',
+          model: 'openai/gpt-oss-120b',
           questionCount: quizData.questions.length,
           difficulty: difficulty || difficultyInfo || 'mixed',
           markingScheme: {

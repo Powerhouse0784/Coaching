@@ -135,7 +135,7 @@ Always maintain a supportive, encouraging tone that empowers teachers to be thei
         },
         ...groqMessages,
       ],
-      model: 'llama-3.1-8b-instant',
+      model: 'openai/gpt-oss-120b',
       temperature: 0.7,
       max_tokens: 2048,
       top_p: 1,

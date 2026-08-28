@@ -110,7 +110,7 @@ Generate the complete study plan now:`;
           content: prompt
         }
       ],
-      model: 'llama-3.1-8b-instant', 
+      model: 'openai/gpt-oss-120b', 
       temperature: 0.7,
       max_tokens: 8000, 
       response_format: { type: 'json_object' }
@@ -145,7 +145,7 @@ Generate the complete study plan now:`;
       plan: studyPlan,
       metadata: {
         generatedAt: new Date().toISOString(),
-        model: 'llama-3.1-8b-instant',
+        model: 'openai/gpt-oss-120b',
         topics,
         days,
         level
@@ -171,14 +171,14 @@ export async function GET() {
     // Test Groq connection
     const testCompletion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: 'Hello' }],
-      model: 'llama-3.1-8b-instant',
+      model: 'openai/gpt-oss-120b',
       max_tokens: 10
     });
 
     return NextResponse.json({
       status: 'healthy',
       service: 'AI Study Planner',
-      model: 'llama-3.1-8b-instant',
+      model: 'openai/gpt-oss-120b',
       apiConnected: !!testCompletion
     });
   } catch (error) {
