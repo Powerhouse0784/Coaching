@@ -3,26 +3,25 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-// ========== NEXTAUTH DATABASE SESSION MODELS (REQUIRED) ==========
 model Account {
   id                String  @id @default(uuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId])
@@ -49,81 +48,71 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-// ========== USER & AUTH MODELS ==========
 model User {
-  id         String   @id @default(uuid())
-  email      String   @unique
-  name       String?
-  password   String?
-  role       String   @default("STUDENT")
-  avatar     String?
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  paymentOrders   PaymentOrder[]
-  orders     Order[]
-  updatedAt  DateTime @updatedAt
-  chatMessages TeacherChatMessage[] @relation("UserChatMessages")
-  iMessages   AIAssistantMessage[] @relation("UserAIMessages")     // AI Assistant (NEW!)
-  phone         String?
-  bio           String?
-  location      String?
-  dateOfBirth   DateTime?
-  qualification String?
-  experience    String?
-  subjects      String?
-  specialization String?
-  teachingStyle String?
-  website       String?
-  linkedin      String?
-  twitter       String?
-  instagram     String?
-
-  // NextAuth relations
-  accounts      Account[]
-  sessions      Session[]
-
-  // App relations
-  student            Student?            @relation("UserStudent")
-  teacher            Teacher?            @relation("UserTeacher")
+  id                 String               @id @default(uuid())
+  email              String               @unique
+  name               String?
+  password           String?
+  role               String               @default("STUDENT")
+  avatar             String?
+  isActive           Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  bio                String?
+  dateOfBirth        DateTime?
+  experience         String?
+  instagram          String?
+  linkedin           String?
+  location           String?
+  phone              String?
+  qualification      String?
+  specialization     String?
+  subjects           String?
+  teachingStyle      String?
+  twitter            String?
+  website            String?
+  orders             Order[]
+  accounts           Account[]
+  iMessages          AIAssistantMessage[] @relation("UserAIMessages")
+  assignmentComments AssignmentComment[]  @relation("UserAssignmentComments")
+  doubtReplies       DoubtReply[]         @relation("UserDoubtReplies")
+  doubtReplyUpvotes  DoubtReplyUpvote[]   @relation("UserDoubtReplyUpvotes")
+  doubtUpvotes       DoubtUpvote[]        @relation("UserDoubtUpvotes")
+  paymentOrders      PaymentOrder[]
+  sessions           Session[]
+  student            Student?             @relation("UserStudent")
+  chatMessages       TeacherChatMessage[] @relation("UserChatMessages")
+  teacher            Teacher?             @relation("UserTeacher")
   videoProgress      VideoProgress[]
-  assignmentComments AssignmentComment[] @relation("UserAssignmentComments")
 
-
-  doubtReplies      DoubtReply[]       @relation("UserDoubtReplies")
-  doubtUpvotes      DoubtUpvote[]      @relation("UserDoubtUpvotes")
-  doubtReplyUpvotes DoubtReplyUpvote[] @relation("UserDoubtReplyUpvotes")
   @@map("users")
 }
 
 model Student {
-  id          String       @id @default(uuid())
-  userId      String       @unique
-  user        User         @relation("UserStudent", fields: [userId], references: [id])
-  submissions Submission[]
-  enrollments Enrollment[]
-
-  doubts Doubt[] @relation("StudentDoubts")
-  noteBookmarks NoteBookmark[] @relation("StudentNoteBookmarks")
-
-  // New Assignment System
+  id                    String                 @id @default(uuid())
+  userId                String                 @unique
   assignmentSubmissions AssignmentSubmission[] @relation("StudentAssignmentSubmissions")
+  doubts                Doubt[]                @relation("StudentDoubts")
+  enrollments           Enrollment[]
+  noteBookmarks         NoteBookmark[]         @relation("StudentNoteBookmarks")
+  user                  User                   @relation("UserStudent", fields: [userId], references: [id])
+  submissions           Submission[]
 
   @@map("students")
 }
 
 model Teacher {
-  id           String        @id @default(uuid())
-  userId       String        @unique
-  user         User          @relation("UserTeacher", fields: [userId], references: [id])
-  experience   String?
-  rating       Float?        @default(0)
-  courses      Course[]
-  assignments  Assignment[]
-  videoFolders VideoFolder[]
-
-  // New Assignment System
+  id            String         @id @default(uuid())
+  userId        String         @unique
+  experience    String?
+  rating        Float?         @default(0)
+  assignments   Assignment[]
   assignmentsV2 AssignmentV2[] @relation("TeacherAssignments")
-  notes Note[] @relation("TeacherNotes")
+  courses       Course[]
+  notes         Note[]         @relation("TeacherNotes")
+  user          User           @relation("UserTeacher", fields: [userId], references: [id])
+  videoFolders  VideoFolder[]
+
   @@map("teachers")
 }
 
@@ -137,27 +126,24 @@ model Category {
 }
 
 model Course {
-  id          String   @id @default(uuid())
+  id          String       @id @default(uuid())
   title       String
-  slug        String   @unique
+  slug        String       @unique
   description String
   price       Float
-  level       String   @default("Beginner")
-  language    String   @default("English")
+  level       String       @default("Beginner")
+  language    String       @default("English")
   thumbnail   String?
-  isPublished Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  teacherId String
-  teacher   Teacher @relation(fields: [teacherId], references: [id])
-
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id])
-
-  modules     Module[]
-  enrollments Enrollment[]
+  isPublished Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  teacherId   String
+  categoryId  String?
   assignments Assignment[]
+  category    Category?    @relation(fields: [categoryId], references: [id])
+  teacher     Teacher      @relation(fields: [teacherId], references: [id])
+  enrollments Enrollment[]
+  modules     Module[]
 
   @@map("courses")
 }
@@ -167,8 +153,8 @@ model Module {
   title    String
   order    Int
   courseId String
-  course   Course    @relation(fields: [courseId], references: [id])
   lectures Lecture[]
+  course   Course    @relation(fields: [courseId], references: [id])
 
   @@map("modules")
 }
@@ -191,15 +177,13 @@ model Enrollment {
   studentId  String
   courseId   String
   enrolledAt DateTime @default(now())
-
-  student Student @relation(fields: [studentId], references: [id])
-  course  Course  @relation(fields: [courseId], references: [id])
+  course     Course   @relation(fields: [courseId], references: [id])
+  student    Student  @relation(fields: [studentId], references: [id])
 
   @@unique([studentId, courseId])
   @@map("enrollments")
 }
 
-// ========== OLD ASSIGNMENT SYSTEM (Keep for backward compatibility) ==========
 model Assignment {
   id          String       @id @default(uuid())
   title       String
@@ -208,42 +192,36 @@ model Assignment {
   dueDate     DateTime
   fileUrl     String?
   createdAt   DateTime     @default(now())
-
-  teacherId String
-  teacher   Teacher @relation(fields: [teacherId], references: [id])
-
-  courseId String?
-  course   Course? @relation(fields: [courseId], references: [id])
-
+  teacherId   String
+  courseId    String?
+  course      Course?      @relation(fields: [courseId], references: [id])
+  teacher     Teacher      @relation(fields: [teacherId], references: [id])
   submissions Submission[]
 
   @@map("assignments")
 }
 
 model Submission {
-  id          String   @id @default(uuid())
-  content     String?
-  fileUrl     String?
-  marks       Int?
-  feedback    String?
-  isEvaluated Boolean  @default(false)
-  submittedAt DateTime @default(now())
-
+  id           String     @id @default(uuid())
+  content      String?
+  fileUrl      String?
+  marks        Int?
+  feedback     String?
+  isEvaluated  Boolean    @default(false)
+  submittedAt  DateTime   @default(now())
   assignmentId String
+  studentId    String
   assignment   Assignment @relation(fields: [assignmentId], references: [id])
-
-  studentId String
-  student   Student @relation(fields: [studentId], references: [id])
+  student      Student    @relation(fields: [studentId], references: [id])
 
   @@unique([assignmentId, studentId])
   @@map("submissions")
 }
 
-// ========== NEW ASSIGNMENT SYSTEM (Professional with PDF uploads and collaboration) ==========
 model AssignmentV2 {
-  id          String   @id @default(uuid())
+  id          String                 @id @default(uuid())
   title       String
-  description String   @db.Text
+  description String
   subject     String
   class       String
   dueDate     DateTime
@@ -251,105 +229,96 @@ model AssignmentV2 {
   fileUrl     String?
   fileName    String?
   fileSize    String?
-  isPublished Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  teacherId String
-  teacher   Teacher @relation("TeacherAssignments", fields: [teacherId], references: [id], onDelete: Cascade)
-
-  submissions AssignmentSubmission[]
+  isPublished Boolean                @default(true)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  teacherId   String
   comments    AssignmentComment[]
+  submissions AssignmentSubmission[]
+  teacher     Teacher                @relation("TeacherAssignments", fields: [teacherId], references: [id], onDelete: Cascade)
 
-  @@map("assignments_v2")
   @@index([teacherId])
   @@index([subject])
   @@index([class])
   @@index([dueDate])
+  @@map("assignments_v2")
 }
 
 model AssignmentSubmission {
-  id          String   @id @default(uuid())
-  fileUrl     String
-  fileName    String
-  fileSize    String
-  remarks     String?  @db.Text
-  status      String   @default("pending") // pending, completed, late
-  isCompleted Boolean  @default(false)
-  submittedAt DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  id           String       @id @default(uuid())
+  fileUrl      String
+  fileName     String
+  fileSize     String
+  remarks      String?
+  status       String       @default("pending")
+  isCompleted  Boolean      @default(false)
+  submittedAt  DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   assignmentId String
+  studentId    String
   assignment   AssignmentV2 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-
-  studentId String
-  student   Student @relation("StudentAssignmentSubmissions", fields: [studentId], references: [id], onDelete: Cascade)
+  student      Student      @relation("StudentAssignmentSubmissions", fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([assignmentId, studentId])
-  @@map("assignment_submissions_v2")
   @@index([assignmentId])
   @@index([studentId])
   @@index([status])
+  @@map("assignment_submissions_v2")
 }
 
 model AssignmentComment {
-  id        String   @id @default(uuid())
-  content   String   @db.Text
-  fileUrl   String?
-  fileName  String?
-  fileSize  String?
-  likes     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id           String       @id @default(uuid())
+  content      String
+  fileUrl      String?
+  fileName     String?
+  fileSize     String?
+  likes        Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   assignmentId String
+  userId       String
   assignment   AssignmentV2 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user         User         @relation("UserAssignmentComments", fields: [userId], references: [id], onDelete: Cascade)
 
-  userId String
-  user   User   @relation("UserAssignmentComments", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("assignment_comments")
   @@index([assignmentId])
   @@index([userId])
+  @@map("assignment_comments")
 }
 
-// ========== VIDEO SYSTEM ==========
 model VideoFolder {
-  id          String   @id @default(uuid())
-  name        String
-  subject     String
-  class       String
-  chapter     String
-  description String?
-  thumbnail   String?
-  isPublic    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(uuid())
+  name              String
+  subject           String
+  class             String
+  chapter           String
+  description       String?
+  thumbnail         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  teacherId         String
+  isPublic          Boolean  @default(true)
   youtubePlaylistId String?
-  teacherId String
-  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-
-  videos Video[]
+  teacher           Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  videos            Video[]
 
   @@map("video_folders")
 }
 
 model Video {
-  id          String   @id @default(uuid())
+  id          String          @id @default(uuid())
   title       String
   description String?
   videoUrl    String
-  duration    String   @default("0:00")
+  duration    String          @default("0:00")
   thumbnail   String?
   size        String?
-  quality     String   @default("1080p")
-  views       Int      @default(0)
-  uploadDate  DateTime @default(now())
-  order Int @default(0)
-  folderId String
-  folder   VideoFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
-
-  progress VideoProgress[]
+  quality     String          @default("1080p")
+  views       Int             @default(0)
+  uploadDate  DateTime        @default(now())
+  folderId    String
+  order       Int             @default(0)
+  progress    VideoProgress[]
+  folder      VideoFolder     @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
   @@map("videos")
 }
@@ -357,164 +326,133 @@ model Video {
 model VideoProgress {
   id                String   @id @default(uuid())
   watchedPercentage Int      @default(0)
-  watchedSeconds    Int      @default(0)
   lastPosition      Int      @default(0)
   completed         Boolean  @default(false)
-  viewCounted       Boolean  @default(false)
   bookmarked        Boolean  @default(false)
-  watchDuration     Int      @default(0)
-  createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  videoId String
-  video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  userId            String
+  videoId           String
+  createdAt         DateTime @default(now())
+  watchDuration     Int      @default(0)
+  viewCounted       Boolean  @default(false)
+  watchedSeconds    Int      @default(0)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video             Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
 
   @@unique([userId, videoId])
   @@map("video_progress")
 }
 
-// ========== CONTACT & CHAT MODELS ==========
 model ContactSubmission {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
   email     String
   subject   String
   category  String
   message   String
-  status    String   @default("pending")
-  priority  String   @default("normal")
-  
+  status    String    @default("pending")
+  priority  String    @default("normal")
   ipAddress String?
   userAgent String?
   repliedAt DateTime?
   repliedBy String?
   notes     String?
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  @@map("contact_submissions")
   @@index([email])
   @@index([status])
   @@index([category])
   @@index([createdAt])
+  @@map("contact_submissions")
 }
 
 model ChatConversation {
-  id        String   @id @default(uuid())
-  sessionId String?  
+  id        String        @id @default(uuid())
+  sessionId String?
   userId    String?
-  
-  messages  ChatMessage[]
-  
-  startedAt DateTime @default(now())
+  startedAt DateTime      @default(now())
   endedAt   DateTime?
+  messages  ChatMessage[]
 
-  @@map("chat_conversations")
   @@index([sessionId])
   @@index([userId])
+  @@map("chat_conversations")
 }
 
 model ChatMessage {
-  id             String   @id @default(uuid())
+  id             String           @id @default(uuid())
   conversationId String
-  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  
   role           String
   content        String
   model          String?
-  
-  createdAt      DateTime @default(now())
+  createdAt      DateTime         @default(now())
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  @@map("chat_messages")
   @@index([conversationId])
+  @@map("chat_messages")
 }
 
-// ========== DOUBT SYSTEM ==========
 model Doubt {
-  id          String   @id @default(uuid())
+  id          String        @id @default(uuid())
   title       String
-  description String   @db.Text
+  description String
   subject     String
   class       String?
-  priority    String   @default("normal") // low, normal, high, urgent
-  
-  // Files
+  priority    String        @default("normal")
   imageUrl    String?
   imageName   String?
   pdfUrl      String?
   pdfName     String?
-  
-  // Status
-  status      String   @default("open") // open, solved, closed
-  isSolved    Boolean  @default(false)
+  status      String        @default("open")
+  isSolved    Boolean       @default(false)
   solvedAt    DateTime?
-  
-  // Engagement
-  views       Int      @default(0)
-  upvotes     Int      @default(0)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
+  views       Int           @default(0)
+  upvotes     Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
   studentId   String
-  student     Student  @relation("StudentDoubts", fields: [studentId], references: [id], onDelete: Cascade)
-  
   replies     DoubtReply[]
   upvotedBy   DoubtUpvote[]
+  student     Student       @relation("StudentDoubts", fields: [studentId], references: [id], onDelete: Cascade)
 
-  @@map("doubts")
   @@index([studentId])
   @@index([subject])
   @@index([status])
   @@index([createdAt])
+  @@map("doubts")
 }
 
 model DoubtReply {
-  id          String   @id @default(uuid())
-  content     String   @db.Text
-  
-  // Files
-  imageUrl    String?
-  imageName   String?
-  pdfUrl      String?
-  pdfName     String?
-  
-  // Status
-  isPinned    Boolean  @default(false)
-  isAccepted  Boolean  @default(false)
-  upvotes     Int      @default(0)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String             @id @default(uuid())
+  content    String
+  imageUrl   String?
+  imageName  String?
+  pdfUrl     String?
+  pdfName    String?
+  isPinned   Boolean            @default(false)
+  isAccepted Boolean            @default(false)
+  upvotes    Int                @default(0)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  doubtId    String
+  userId     String
+  doubt      Doubt              @relation(fields: [doubtId], references: [id], onDelete: Cascade)
+  user       User               @relation("UserDoubtReplies", fields: [userId], references: [id], onDelete: Cascade)
+  upvotedBy  DoubtReplyUpvote[]
 
-  // Relations
-  doubtId     String
-  doubt       Doubt    @relation(fields: [doubtId], references: [id], onDelete: Cascade)
-  
-  userId      String
-  user        User     @relation("UserDoubtReplies", fields: [userId], references: [id], onDelete: Cascade)
-  
-  upvotedBy   DoubtReplyUpvote[]
-
-  @@map("doubt_replies")
   @@index([doubtId])
   @@index([userId])
   @@index([isPinned])
+  @@map("doubt_replies")
 }
 
 model DoubtUpvote {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
-
   doubtId   String
-  doubt     Doubt    @relation(fields: [doubtId], references: [id], onDelete: Cascade)
-  
   userId    String
+  doubt     Doubt    @relation(fields: [doubtId], references: [id], onDelete: Cascade)
   user      User     @relation("UserDoubtUpvotes", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([doubtId, userId])
@@ -522,129 +460,98 @@ model DoubtUpvote {
 }
 
 model DoubtReplyUpvote {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-
+  id        String     @id @default(uuid())
+  createdAt DateTime   @default(now())
   replyId   String
-  reply     DoubtReply @relation(fields: [replyId], references: [id], onDelete: Cascade)
-  
   userId    String
-  user      User     @relation("UserDoubtReplyUpvotes", fields: [userId], references: [id], onDelete: Cascade)
+  reply     DoubtReply @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  user      User       @relation("UserDoubtReplyUpvotes", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([replyId, userId])
   @@map("doubt_reply_upvotes")
 }
 
-// ========== NOTES SYSTEM ==========
 model Note {
-  id          String   @id @default(uuid())
-  title       String
-  description String?  @db.Text
-  subject     String
-  class       String
-  topic       String?
-  chapter     String?
-  
-  // File details
-  fileUrl     String
-  fileName    String
-  fileType    String   // pdf, image, doc
-  fileSize    String
+  id           String         @id @default(uuid())
+  title        String
+  description  String?
+  subject      String
+  class        String
+  topic        String?
+  chapter      String?
+  fileUrl      String
+  fileName     String
+  fileType     String
+  fileSize     String
   thumbnailUrl String?
-  
-  price       Int      @default(30)  // Default ₹30 per copy
+  isPublished  Boolean        @default(true)
+  isPinned     Boolean        @default(false)
+  downloads    Int            @default(0)
+  views        Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  teacherId    String
+  price        Int            @default(30)
+  bookmarks    NoteBookmark[]
+  teacher      Teacher        @relation("TeacherNotes", fields: [teacherId], references: [id], onDelete: Cascade)
 
-  // Status
-  isPublished Boolean  @default(true)
-  isPinned    Boolean  @default(false)
-  
-  // Stats
-  downloads   Int      @default(0)
-  views       Int      @default(0)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  teacherId   String
-  teacher     Teacher  @relation("TeacherNotes", fields: [teacherId], references: [id], onDelete: Cascade)
-  
-  bookmarks   NoteBookmark[]
-
-  @@map("notes")
   @@index([teacherId])
   @@index([subject])
   @@index([class])
   @@index([isPublished])
   @@index([isPinned])
   @@index([createdAt])
+  @@map("notes")
 }
 
 model NoteBookmark {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
-
   noteId    String
-  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
-  
   studentId String
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
   student   Student  @relation("StudentNoteBookmarks", fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([noteId, studentId])
   @@map("note_bookmarks")
 }
 
-// ========== TEACHER CHAT SYSTEM ==========
 model TeacherChatMessage {
   id        String   @id @default(uuid())
-  content   String   @db.Text
-  
-  // File attachments
+  content   String
   fileUrl   String?
   fileName  String?
-  fileType  String?  // image, pdf, document
+  fileType  String?
   fileSize  String?
-  
-  // Message metadata
   isRead    Boolean  @default(false)
   readBy    String[] @default([])
-  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  // Relations
   senderId  String
   sender    User     @relation("UserChatMessages", fields: [senderId], references: [id], onDelete: Cascade)
 
-  @@map("teacher_chat_messages")
   @@index([senderId])
   @@index([createdAt])
+  @@map("teacher_chat_messages")
 }
 
 model AIAssistantMessage {
   id        String   @id @default(uuid())
-  content   String   @db.Text
-  
-  // File attachments
+  content   String
   fileUrl   String?
   fileName  String?
-  fileType  String?  // image, pdf
+  fileType  String?
   fileSize  String?
-  
-  // Message type
-  isAI      Boolean  @default(false)  // true = AI response, false = user message
-  
+  isAI      Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  // Relations
   teacherId String
   teacher   User     @relation("UserAIMessages", fields: [teacherId], references: [id], onDelete: Cascade)
 
-  @@map("ai_assistant_messages")
   @@index([teacherId])
   @@index([createdAt])
   @@index([isAI])
+  @@map("ai_assistant_messages")
 }
 
 model PasswordResetToken {
@@ -655,67 +562,66 @@ model PasswordResetToken {
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  @@map("password_reset_tokens")
   @@index([email])
   @@index([token])
+  @@map("password_reset_tokens")
 }
 
 model PaymentOrder {
-  id              String   @id @default(uuid())
-  orderId         String   @unique   // Razorpay order ID
-  paymentId       String?            // Razorpay payment ID (after success)
+  id              String             @id @default(uuid())
+  orderId         String             @unique
+  paymentId       String?
   signature       String?
-  amount          Int                // in rupees
-  currency        String   @default("INR")
-  status          String   @default("pending") // pending | paid | failed
+  amount          Int
+  currency        String             @default("INR")
+  status          String             @default("pending")
   couponCode      String?
-  couponDiscount  Int      @default(0)
-  deliveryAddress Json?              // for hardcopy orders
+  couponDiscount  Int                @default(0)
+  deliveryAddress Json?
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
   items           PaymentOrderItem[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
- 
-  @@map("payment_orders")
+  user            User               @relation(fields: [userId], references: [id])
+
   @@index([userId])
   @@index([status])
+  @@map("payment_orders")
 }
- 
+
 model PaymentOrderItem {
-  id        String   @id @default(uuid())
+  id        String       @id @default(uuid())
   orderId   String
-  order     PaymentOrder @relation(fields: [orderId], references: [id])
-  type      String   // fee | hardcopy
-  refId     String   // planId or noteId
+  type      String
+  refId     String
   name      String
-  qty       Int      @default(1)
+  qty       Int          @default(1)
   unitPrice Int
   total     Int
-  createdAt DateTime @default(now())
- 
-  @@map("payment_order_items")
+  createdAt DateTime     @default(now())
+  order     PaymentOrder @relation(fields: [orderId], references: [id])
+
   @@index([orderId])
+  @@map("payment_order_items")
 }
 
 model Order {
-  id               String   @id @default(cuid())
-  userId           String?  
-  userEmail        String
-  userName         String?
-  userPhone        String?
-  items            Json     // Store cart items
-  subtotal         Int
-  couponDiscount   Int      @default(0)
-  total            Int
-  couponCode       String?
-  address          Json?    // Store delivery address
-  paymentMethod    String?  // 'qr' or 'cod'
-  paymentProof     String?  // URL to uploaded proof
-  status           String   @default("pending") // pending, approved, rejected
-  rejectionReason  String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  user User? @relation(fields: [userId], references: [id])
+  id              String   @id @default(cuid())
+  userId          String?
+  userEmail       String
+  userName        String?
+  userPhone       String?
+  items           Json
+  subtotal        Int
+  couponDiscount  Int      @default(0)
+  total           Int
+  couponCode      String?
+  address         Json?
+  paymentMethod   String?
+  paymentProof    String?
+  status          String   @default("pending")
+  rejectionReason String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User?    @relation(fields: [userId], references: [id])
 }
