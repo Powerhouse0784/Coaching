@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
       customHolidays,
       nationalHolidays: getNationalHolidays(year),
     });
+    
   } catch (error) {
     console.error("Schedule GET error:", error);
     return NextResponse.json({ error: "Failed to fetch schedule" }, { status: 500 });
