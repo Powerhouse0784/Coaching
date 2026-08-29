@@ -6,6 +6,7 @@ import { UTApi } from "uploadthing/server";
 // ✅ Export both hooks AND uploadFiles function
 export const { useUploadThing, uploadFiles } = generateReactHelpers<OurFileRouter>();
 
+
 /**
  * Delete files from UploadThing storage (SERVER-SIDE ONLY)
  * @param fileUrls - Array of UploadThing file URLs to delete
