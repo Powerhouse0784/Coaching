@@ -32,6 +32,7 @@ export const NATIONAL_HOLIDAYS_2026: NationalHoliday[] = [
   { title: "Christmas", date: "2026-12-25" },
 ];
 
+
 export function getNationalHolidays(year: number): NationalHoliday[] {
   if (year === 2026) return NATIONAL_HOLIDAYS_2026;
   // Fallback for other years: no seeded data yet, return empty (teacher can add custom ones)
