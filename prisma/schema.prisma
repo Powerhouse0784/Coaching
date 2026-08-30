@@ -635,8 +635,8 @@ model ScheduleSession {
   title     String
   subject   String
   class     String
-  dayOfWeek Int      // 0 = Sunday ... 6 = Saturday (recurs weekly)
-  startTime String   // "HH:MM" 24-hour
+  date      DateTime
+  startTime String
   endTime   String
   color     String   @default("#3b82f6")
   notes     String?

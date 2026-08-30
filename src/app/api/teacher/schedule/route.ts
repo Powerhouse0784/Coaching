@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()), 10);
 
     const [sessions, customHolidays] = await Promise.all([
-      prisma.scheduleSession.findMany({ where: { teacherId }, orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] }),
+      prisma.scheduleSession.findMany({ where: { teacherId }, orderBy: [{ date: "asc" }, { startTime: "asc" }] }),
       prisma.scheduleHoliday.findMany({ where: { teacherId }, orderBy: { date: "asc" } }),
     ]);
 
@@ -60,13 +60,13 @@ export async function POST(req: NextRequest) {
     }
 
     // default: session
-    const { title, subject, class: className, dayOfWeek, startTime, endTime, color, notes } = body;
-    if (!title || !subject || !className || dayOfWeek === undefined || !startTime || !endTime) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
-    const created = await prisma.scheduleSession.create({
-      data: { teacherId, title, subject, class: className, dayOfWeek, startTime, endTime, color: color || "#3b82f6", notes: notes || null },
-    });
+    const { title, subject, class: className, date, startTime, endTime, color, notes } = body;
+      if (!title || !subject || !className || !date || !startTime || !endTime) {
+        return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      }
+      const created = await prisma.scheduleSession.create({
+        data: { teacherId, title, subject, class: className, date: new Date(date), startTime, endTime, color: color || "#3b82f6", notes: notes || null },
+      });
     return NextResponse.json({ success: true, session: created });
   } catch (error) {
     console.error("Schedule POST error:", error);
@@ -83,7 +83,7 @@ export async function PUT(req: NextRequest) {
     if (!teacherId) return NextResponse.json({ error: "Teacher profile not found" }, { status: 404 });
 
     const body = await req.json();
-    const { id, title, subject, class: className, dayOfWeek, startTime, endTime, color, notes } = body;
+    const { id, title, subject, class: className, date, startTime, endTime, color, notes } = body;
     if (!id) return NextResponse.json({ error: "Session id required" }, { status: 400 });
 
     const existing = await prisma.scheduleSession.findUnique({ where: { id } });
@@ -93,7 +93,7 @@ export async function PUT(req: NextRequest) {
 
     const updated = await prisma.scheduleSession.update({
       where: { id },
-      data: { title, subject, class: className, dayOfWeek, startTime, endTime, color, notes },
+      data: { title, subject, class: className, date: date ? new Date(date) : undefined, startTime, endTime, color, notes },
     });
     return NextResponse.json({ success: true, session: updated });
   } catch (error) {
