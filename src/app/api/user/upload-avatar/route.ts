@@ -4,10 +4,11 @@ import path from "path"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { prisma } from "@/lib/prisma"
+import { getSessionUser } from "@/lib/getSessionUser";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getSessionUser(req)
 
     if (!session) {
       return NextResponse.json(
