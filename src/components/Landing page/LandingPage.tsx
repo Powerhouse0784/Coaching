@@ -872,6 +872,10 @@ const ProtectedLanding = () => {
                 <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400" />
                 <span className="font-semibold">India's Most Advanced AI Learning Platform</span>
               </div>
+              <div className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 backdrop-blur-lg text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-yellow-400/30 text-xs sm:text-sm animate-pulse">
+              <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400" />
+              <span className="font-semibold">🌅 Morning & 🌙 Evening Batches Available</span>
+            </div>
               <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-4 sm:mb-6 leading-tight">
                 Learn with
                 <span className="block bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-400 bg-clip-text text-transparent mt-1 sm:mt-2">Intensity</span>
