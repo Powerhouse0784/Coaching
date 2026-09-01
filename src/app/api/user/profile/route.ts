@@ -4,6 +4,53 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from "@/lib/getSessionUser";
 
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getSessionUser(request);
+
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        avatar: true,
+        phone: true,
+        bio: true,
+        location: true,
+        dateOfBirth: true,
+        qualification: true,
+        experience: true,
+        subjects: true,
+        specialization: true,
+        teachingStyle: true,
+        website: true,
+        linkedin: true,
+        twitter: true,
+        instagram: true,
+        createdAt: true,
+        updatedAt: true,
+        isActive: true,
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(user);
+  } catch (error) {
+    console.error('Error fetching own profile:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
 export async function PUT(request: NextRequest) {
   try {
     const session = await getSessionUser(request);
