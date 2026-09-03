@@ -4,7 +4,6 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from "@/lib/getSessionUser";
 
-
 export async function GET(request: NextRequest) {
   try {
     const session = await getSessionUser(request);
