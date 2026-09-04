@@ -338,7 +338,7 @@ export async function POST(req: NextRequest) {
           content: message,
         },
       ],
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       temperature: 0.7,
       max_tokens: 1024,
       top_p: 0.9,
@@ -361,7 +361,7 @@ export async function POST(req: NextRequest) {
         success: true,
         response,
         sessionId,
-        model: 'llama-3.3-70b-versatile',
+        model: 'openai/gpt-oss-120b',
         timestamp: new Date().toISOString(),
       },
       {
