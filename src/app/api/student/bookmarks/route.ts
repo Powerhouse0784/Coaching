@@ -1,101 +1,69 @@
 // app/api/student/bookmarks/route.ts
-// ✅ No major changes needed - already working correctly
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { prisma } from '@/lib/prisma';
+// Bookmark a video / list bookmarked videos.
+// Uses getSessionUser so it works for the website (cookie) AND the mobile app (Bearer token).
+// The old version used getServerSession only, so every call from the app was a 401.
 
-// POST - Toggle bookmark on a video
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getSessionUser } from '@/lib/getSessionUser';
+
+// POST { videoId, bookmarked } - sets (not toggles) the bookmark, so a retried request can never flip it back.
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const session = await getSessionUser(request);
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const userId = session.user.id;
 
-    const data = await request.json();
-    const { videoId, bookmarked } = data;
+    const body = await request.json().catch(() => null);
+    const videoId = body?.videoId;
+    if (!videoId || typeof videoId !== 'string') return NextResponse.json({ error: 'Video ID is required' }, { status: 400 });
+    if (typeof body?.bookmarked !== 'boolean') return NextResponse.json({ error: 'bookmarked must be true or false' }, { status: 400 });
+    const bookmarked: boolean = body.bookmarked;
 
-    if (!videoId) {
-      return NextResponse.json({ error: 'Video ID is required' }, { status: 400 });
-    }
+    // a deleted / unknown video is a 404, not a foreign-key 500
+    const video = await prisma.video.findUnique({ where: { id: videoId }, select: { id: true } });
+    if (!video) return NextResponse.json({ error: 'Video not found' }, { status: 404 });
 
-    // Upsert progress record with bookmark status
     const progress = await prisma.videoProgress.upsert({
-      where: {
-        userId_videoId: {
-          userId: session.user.id,
-          videoId: videoId
-        }
-      },
-      update: {
-        bookmarked: bookmarked,
-        updatedAt: new Date()
-      },
-      create: {
-        userId: session.user.id,
-        videoId: videoId,
-        bookmarked: bookmarked,
-        watchedPercentage: 0,
-        watchedSeconds: 0, // ✅ Initialize with 0
-        completed: false,
-        viewCounted: false // ✅ Initialize with false
-      }
+      where: { userId_videoId: { userId, videoId } },
+      update: { bookmarked },
+      create: { userId, videoId, bookmarked, watchedPercentage: 0, watchedSeconds: 0, completed: false, viewCounted: false },
+      select: { bookmarked: true },
     });
 
-    return NextResponse.json({
-      success: true,
-      bookmarked: progress.bookmarked
-    });
+    return NextResponse.json({ success: true, bookmarked: progress.bookmarked });
   } catch (error) {
-    console.error('Error toggling bookmark:', error);
-    return NextResponse.json({ error: 'Failed to toggle bookmark' }, { status: 500 });
+    console.error('Error setting bookmark:', error);
+    return NextResponse.json({ error: 'Failed to update bookmark' }, { status: 500 });
   }
 }
 
-// GET - Get all bookmarked videos for the user
+// GET - all bookmarked videos of the signed-in student
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const session = await getSessionUser(request);
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const bookmarkedProgress = await prisma.videoProgress.findMany({
-      where: {
-        userId: session.user.id,
-        bookmarked: true
-      },
-      include: {
-        video: {
-          include: {
-            folder: {
-              select: {
-                name: true,
-                subject: true
-              }
-            }
-          }
-        }
-      }
+    const rows = await prisma.videoProgress.findMany({
+      where: { userId: session.user.id, bookmarked: true },
+      include: { video: { include: { folder: { select: { name: true, subject: true } } } } },
+      orderBy: { updatedAt: 'desc' },
     });
 
-    const bookmarkedVideos = bookmarkedProgress.map(progress => ({
-      id: progress.video.id,
-      title: progress.video.title,
-      description: progress.video.description || '',
-      duration: progress.video.duration,
-      videoUrl: progress.video.videoUrl,
-      thumbnail: progress.video.thumbnail || '', // ✅ Support thumbnails
-      folderName: progress.video.folder.name,
-      folderSubject: progress.video.folder.subject,
-      watchedPercentage: progress.watchedPercentage,
-      completed: progress.completed
-    }));
-
-    return NextResponse.json(bookmarkedVideos);
+    return NextResponse.json(
+      rows.map((p) => ({
+        id: p.video.id,
+        title: p.video.title,
+        description: p.video.description || '',
+        duration: p.video.duration,
+        videoUrl: p.video.videoUrl,
+        thumbnail: p.video.thumbnail || `https://img.youtube.com/vi/${p.video.videoUrl}/hqdefault.jpg`,
+        folderName: p.video.folder.name,
+        folderSubject: p.video.folder.subject,
+        watchedPercentage: p.watchedPercentage,
+        completed: p.completed,
+      }))
+    );
   } catch (error) {
     console.error('Error fetching bookmarks:', error);
     return NextResponse.json({ error: 'Failed to fetch bookmarks' }, { status: 500 });

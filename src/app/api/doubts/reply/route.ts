@@ -1,174 +1,121 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { prisma } from '@/lib/prisma';
+// /api/doubts/reply
+//  POST   { doubtId, content?, imageUrl?, pdfUrl?, ... }   add a reply (text and/or one attachment)
+//  PATCH  { replyId }                                       like / unlike a reply (self-healing counter)
+//  DELETE ?id=<replyId>                                     reply owner or teacher
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/getSessionUser";
-// POST - Add reply to doubt
+import { rateLimit } from "@/lib/rate-limit";
+
+export const dynamic = "force-dynamic";
+
+const MAX_CONTENT = 2000;
+const str = (v: unknown, max: number): string => (typeof v === "string" ? v.trim().slice(0, max) : "");
+const httpUrl = (v: unknown): string | null => {
+  if (typeof v !== "string" || v.length > 2048) return null;
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionUser(req);
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const body = await req.json();
-    const { doubtId, content, imageUrl, imageName, pdfUrl, pdfName } = body;
+    const rl = await rateLimit({ identifier: `reply-post:${session.user.id}`, limit: 20, window: 600 });
+    if (!rl.success) return NextResponse.json({ error: "You're replying too fast. Please wait a moment." }, { status: 429 });
 
-    if (!doubtId || !content) {
-      return NextResponse.json(
-        { error: 'Doubt ID and content are required' },
-        { status: 400 }
-      );
-    }
+    const body = await req.json().catch(() => ({}));
+    const doubtId = typeof body.doubtId === "string" ? body.doubtId : "";
+    const content = str(body.content, MAX_CONTENT);
+    const imageUrl = httpUrl(body.imageUrl);
+    const pdfUrl = httpUrl(body.pdfUrl);
 
-    // Check if doubt exists
-    const doubt = await prisma.doubt.findUnique({
-      where: { id: doubtId },
-    });
+    if (!doubtId) return NextResponse.json({ error: "Doubt ID is required" }, { status: 400 });
+    // The app lets people send just a photo or PDF, so text is only required when there is no attachment.
+    if (!content && !imageUrl && !pdfUrl) return NextResponse.json({ error: "Write something or attach a file" }, { status: 400 });
 
-    if (!doubt) {
-      return NextResponse.json({ error: 'Doubt not found' }, { status: 404 });
-    }
+    const doubt = await prisma.doubt.findUnique({ where: { id: doubtId }, select: { id: true } });
+    if (!doubt) return NextResponse.json({ error: "Doubt not found" }, { status: 404 });
 
-    // Create reply
     const reply = await prisma.doubtReply.create({
       data: {
         content,
-        imageUrl: imageUrl || null,
-        imageName: imageName || null,
-        pdfUrl: pdfUrl || null,
-        pdfName: pdfName || null,
+        imageUrl,
+        imageName: imageUrl ? str(body.imageName, 160) || null : null,
+        pdfUrl,
+        pdfName: pdfUrl ? str(body.pdfName, 160) || null : null,
         doubtId,
         userId: session.user.id,
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-            role: true,
-          },
-        },
-      },
+      include: { user: { select: { id: true, name: true, avatar: true, role: true } } },
     });
-
     return NextResponse.json({ success: true, reply }, { status: 201 });
-  } catch (error: any) {
-    console.error('Error creating reply:', error);
-    return NextResponse.json(
-      { error: 'Failed to create reply', details: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Error creating reply:", error);
+    return NextResponse.json({ error: "Failed to create reply" }, { status: 500 });
   }
 }
 
-// PATCH - Upvote reply
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getSessionUser(req);
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const userId = session.user.id;
 
-    const body = await req.json();
-    const { replyId } = body;
+    const rl = await rateLimit({ identifier: `reply-like:${userId}`, limit: 120, window: 60 });
+    if (!rl.success) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
 
-    if (!replyId) {
-      return NextResponse.json({ error: 'Reply ID required' }, { status: 400 });
-    }
+    const body = await req.json().catch(() => ({}));
+    const replyId = typeof body.replyId === "string" ? body.replyId : "";
+    if (!replyId) return NextResponse.json({ error: "Reply ID required" }, { status: 400 });
 
-    // Check for existing upvote
-    const existingUpvote = await prisma.doubtReplyUpvote.findUnique({
-      where: {
-        replyId_userId: {
-          replyId,
-          userId: session.user.id,
-        },
-      },
-    });
+    const reply = await prisma.doubtReply.findUnique({ where: { id: replyId }, select: { id: true } });
+    if (!reply) return NextResponse.json({ error: "Reply not found" }, { status: 404 });
 
-    if (existingUpvote) {
-      // Remove upvote
-      await prisma.doubtReplyUpvote.delete({
-        where: { id: existingUpvote.id },
-      });
-
-      const reply = await prisma.doubtReply.update({
-        where: { id: replyId },
-        data: { upvotes: { decrement: 1 } },
-      });
-
-      return NextResponse.json({ success: true, action: 'removed', reply });
+    const existing = await prisma.doubtReplyUpvote.findUnique({ where: { replyId_userId: { replyId, userId } } });
+    if (existing) {
+      await prisma.doubtReplyUpvote.deleteMany({ where: { replyId, userId } });
     } else {
-      // Add upvote
-      await prisma.doubtReplyUpvote.create({
-        data: {
-          replyId,
-          userId: session.user.id,
-        },
-      });
-
-      const reply = await prisma.doubtReply.update({
-        where: { id: replyId },
-        data: { upvotes: { increment: 1 } },
-      });
-
-      return NextResponse.json({ success: true, action: 'added', reply });
+      try {
+        await prisma.doubtReplyUpvote.create({ data: { replyId, userId } });
+      } catch (e: any) {
+        if (e?.code !== "P2002") throw e; // two taps at once: the like already exists
+      }
     }
-  } catch (error: any) {
-    console.error('Error upvoting reply:', error);
-    return NextResponse.json(
-      { error: 'Failed to upvote reply', details: error.message },
-      { status: 500 }
-    );
+    const upvotes = await prisma.doubtReplyUpvote.count({ where: { replyId } });
+    await prisma.doubtReply.update({ where: { id: replyId }, data: { upvotes } });
+    const hasUpvoted = !!(await prisma.doubtReplyUpvote.findUnique({ where: { replyId_userId: { replyId, userId } } }));
+    return NextResponse.json({ success: true, action: hasUpvoted ? "added" : "removed", upvotes, hasUpvoted });
+  } catch (error) {
+    console.error("Error upvoting reply:", error);
+    return NextResponse.json({ error: "Failed to upvote reply" }, { status: 500 });
   }
 }
 
-// DELETE - Delete reply
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getSessionUser(req);
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { searchParams } = new URL(req.url);
-    const replyId = searchParams.get('id');
+    const replyId = new URL(req.url).searchParams.get("id");
+    if (!replyId) return NextResponse.json({ error: "Reply ID required" }, { status: 400 });
 
-    if (!replyId) {
-      return NextResponse.json({ error: 'Reply ID required' }, { status: 400 });
-    }
+    const reply = await prisma.doubtReply.findUnique({ where: { id: replyId } });
+    if (!reply) return NextResponse.json({ error: "Reply not found" }, { status: 404 });
 
-    const reply = await prisma.doubtReply.findUnique({
-      where: { id: replyId },
-    });
-
-    if (!reply) {
-      return NextResponse.json({ error: 'Reply not found' }, { status: 404 });
-    }
-
-    // Only reply owner or teacher can delete
     const isOwner = reply.userId === session.user.id;
-    const isTeacher = session.user.role === 'TEACHER';
+    const isTeacher = session.user.role === "TEACHER" || session.user.role === "ADMIN";
+    if (!isOwner && !isTeacher) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
-    if (!isOwner && !isTeacher) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    await prisma.doubtReply.delete({
-      where: { id: replyId },
-    });
-
-    return NextResponse.json({ success: true, message: 'Reply deleted successfully' });
-  } catch (error: any) {
-    console.error('Error deleting reply:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete reply', details: error.message },
-      { status: 500 }
-    );
+    await prisma.doubtReply.delete({ where: { id: replyId } });
+    return NextResponse.json({ success: true, message: "Reply deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting reply:", error);
+    return NextResponse.json({ error: "Failed to delete reply" }, { status: 500 });
   }
 }

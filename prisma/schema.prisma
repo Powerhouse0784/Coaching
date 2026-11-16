@@ -84,6 +84,9 @@ model User {
   chatMessages       TeacherChatMessage[] @relation("UserChatMessages")
   teacher            Teacher?             @relation("UserTeacher")
   videoProgress      VideoProgress[]
+  watchLogs          WatchLog[]
+  quizAttempts       QuizAttempt[]
+  pushTokens         PushToken[]
 
   @@map("users")
 }
@@ -91,6 +94,8 @@ model User {
 model Student {
   id                    String                 @id @default(uuid())
   userId                String                 @unique
+  grade                 String?
+  dailyGoalMinutes      Int                    @default(120)
   assignmentSubmissions AssignmentSubmission[] @relation("StudentAssignmentSubmissions")
   doubts                Doubt[]                @relation("StudentDoubts")
   enrollments           Enrollment[]
@@ -655,4 +660,49 @@ model ScheduleHoliday {
   createdAt DateTime @default(now())
 
   @@map("schedule_holidays")
+}
+
+// Per-day watch time (IST calendar day). Powers the dashboard goal ring + weekly chart.
+model WatchLog {
+  id      String   @id @default(uuid())
+  userId  String
+  day     DateTime @db.Date
+  seconds Int      @default(0)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@index([userId, day])
+  @@map("watch_logs")
+}
+
+// One row per finished quiz. Score is reported by the client (questions are AI generated, not stored).
+model QuizAttempt {
+  id         String   @id @default(uuid())
+  userId     String
+  category   String
+  title      String
+  correct    Int
+  total      Int
+  score      Int
+  totalMarks Int
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("quiz_attempts")
+}
+
+// One row per app install that agreed to notifications (Expo push token).
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  platform  String?
+  chatMuted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_tokens")
 }

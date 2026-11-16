@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "video_progress" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "watchDuration" INTEGER NOT NULL DEFAULT 0;

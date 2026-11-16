@@ -1,5 +1,13 @@
-// Simple in-memory rate limiting
-// Note: This resets on server restart. For production, use Redis with proper permissions.
+// Rate limiting.
+// - With UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN set, counters live in Redis and are shared by every
+//   serverless instance (this is what you want on Vercel).
+// - Without them it falls back to an in-memory window that is per instance and resets on cold start.
+import { Redis } from "@upstash/redis";
+
+const redis =
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+    ? new Redis({ url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN })
+    : null;
 
 interface RateLimitStore {
   [key: string]: number[];
@@ -23,6 +31,18 @@ export async function rateLimit(config: RateLimitConfig) {
   const windowStart = now - window * 1000;
 
   try {
+    if (redis) {
+      const key = `rl:${identifier}`;
+      const count = await redis.incr(key);
+      if (count === 1) await redis.expire(key, window);
+      return {
+        success: count <= limit,
+        remaining: Math.max(0, limit - count),
+        reset: Math.ceil((now + window * 1000) / 1000),
+        limit,
+      };
+    }
+
     // Initialize if doesn't exist
     if (!store[identifier]) {
       store[identifier] = [];

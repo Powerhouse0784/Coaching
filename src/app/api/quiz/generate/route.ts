@@ -1,6 +1,11 @@
 // app/api/quiz/generate/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { getSessionUser } from '@/lib/getSessionUser';
+import { rateLimit } from '@/lib/rate-limit';
+
+// Generating 20 questions can take 20-60 s; without this Vercel may cut the request off early.
+export const maxDuration = 60;
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -113,8 +118,22 @@ const QUIZ_CATEGORIES: QuizCategories = {
 
 export async function POST(req: NextRequest) {
   try {
+    // Every generation costs Groq credits: signed-in users only, and capped per user.
+    const session = await getSessionUser(req);
+    if (!session) {
+      return NextResponse.json({ success: false, error: 'Please sign in to take a quiz' }, { status: 401 });
+    }
+    const limit = await rateLimit({ identifier: `quiz:${session.user.id}`, limit: 15, window: 3600 });
+    if (!limit.success) {
+      return NextResponse.json(
+        { success: false, error: 'Too many quizzes generated. Please try again in a while.' },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
-    const { category, questionCount = 20, difficulty } = body;
+    const { category, difficulty } = body;
+    const questionCount = Number(body.questionCount) || 20;
 
     if (!category || !QUIZ_CATEGORIES[category as keyof typeof QUIZ_CATEGORIES]) {
       return NextResponse.json(
@@ -124,7 +143,7 @@ export async function POST(req: NextRequest) {
     }
 
     const quizInfo = QUIZ_CATEGORIES[category as keyof typeof QUIZ_CATEGORIES];
-    const numQuestions = Math.min(questionCount, 30); // Max 30 questions
+    const numQuestions = Math.min(Math.max(1, Math.floor(questionCount)), 30); // 1-30 questions
 
     // Check if this is a CBSE category (has class property)
     const isCBSE = 'class' in quizInfo;
@@ -193,7 +212,7 @@ Generate ${numQuestions} questions now in valid JSON format:`;
       ],
       model: 'openai/gpt-oss-120b',
       temperature: 0.7, // Lower for more consistent JSON formatting
-      max_tokens: 8000,
+      max_tokens: 12000,
       response_format: { type: 'json_object' }
     });
 

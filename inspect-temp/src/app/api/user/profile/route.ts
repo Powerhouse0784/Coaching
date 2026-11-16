@@ -1,0 +1,139 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { prisma } from '@/lib/prisma';
+import { getSessionUser } from "@/lib/getSessionUser";
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getSessionUser(request);
+
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        avatar: true,
+        phone: true,
+        bio: true,
+        location: true,
+        dateOfBirth: true,
+        qualification: true,
+        experience: true,
+        subjects: true,
+        specialization: true,
+        teachingStyle: true,
+        website: true,
+        linkedin: true,
+        twitter: true,
+        instagram: true,
+        createdAt: true,
+        updatedAt: true,
+        isActive: true,
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(user);
+  } catch (error) {
+    console.error('Error fetching own profile:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await getSessionUser(request);
+
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const {
+      name,
+      email,
+      phone,
+      bio,
+      location,
+      dateOfBirth,
+      qualification,
+      experience,
+      subjects,
+      specialization,
+      teachingStyle,
+      website,
+      linkedin,
+      twitter,
+      instagram,
+      avatar,
+    } = body;
+
+    // Update user profile
+    const updatedUser = await prisma.user.update({
+      where: { id: session.user.id },
+      data: {
+        name,
+        email,
+        phone,
+        bio,
+        location,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+        qualification,
+        experience,
+        subjects,
+        specialization,
+        teachingStyle,
+        website,
+        linkedin,
+        twitter,
+        instagram,
+        avatar,
+        updatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        avatar: true,
+        phone: true,
+        bio: true,
+        location: true,
+        dateOfBirth: true,
+        qualification: true,
+        experience: true,
+        subjects: true,
+        specialization: true,
+        teachingStyle: true,
+        website: true,
+        linkedin: true,
+        twitter: true,
+        instagram: true,
+        createdAt: true,
+        updatedAt: true,
+        isActive: true,
+      },
+    });
+
+    return NextResponse.json(updatedUser);
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

@@ -25,13 +25,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma'; // adjust to your actual prisma client path
+import { getClientIp, rateLimit } from '@/lib/rate-limit';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Token helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+function adminSecret(): string {
+  const s = process.env.ADMIN_TOKEN_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!s) throw new Error('ADMIN_TOKEN_SECRET (or NEXTAUTH_SECRET) must be set');
+  return s;
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const x = crypto.createHash('sha256').update(a).digest();
+  const y = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(x, y);
+}
+
 function makeToken(email: string): string {
-  const secret = process.env.ADMIN_TOKEN_SECRET || process.env.NEXTAUTH_SECRET || 'fallback-secret';
+  const secret = adminSecret();
   const day    = Math.floor(Date.now() / 86_400_000);
   return crypto.createHmac('sha256', secret).update(`${email}:${day}`).digest('hex');
 }
@@ -40,11 +53,12 @@ function verifyToken(token: string | null | undefined): boolean {
   if (!token) return false;
   const email  = process.env.ADMIN_EMAIL;
   if (!email) return false;
-  const secret = process.env.ADMIN_TOKEN_SECRET || process.env.NEXTAUTH_SECRET || 'fallback-secret';
+  let secret: string;
+  try { secret = adminSecret(); } catch { return false; }
   const day    = Math.floor(Date.now() / 86_400_000);
   const make   = (offset: number) =>
     crypto.createHmac('sha256', secret).update(`${email}:${day - offset}`).digest('hex');
-  return token === make(0) || token === make(1); // today + yesterday (midnight edge)
+  return safeEqual(token, make(0)) || safeEqual(token, make(1)); // today + yesterday (midnight edge)
 }
 
 function bearerToken(req: NextRequest) {
@@ -80,6 +94,11 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleLogin(req: NextRequest) {
+  const limit = await rateLimit({ identifier: `admin-login:${getClientIp(req)}`, limit: 8, window: 900 });
+  if (!limit.success) {
+    return NextResponse.json({ success: false, error: 'Too many attempts. Try again in 15 minutes.' }, { status: 429 });
+  }
+
   const { email, password } = await req.json();
   const adminEmail    = process.env.ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD;
@@ -87,7 +106,9 @@ async function handleLogin(req: NextRequest) {
   if (!adminEmail || !adminPassword) {
     return err500('Admin credentials not configured. Set ADMIN_EMAIL and ADMIN_PASSWORD in .env');
   }
-  if (email?.toLowerCase() !== adminEmail.toLowerCase() || password !== adminPassword) {
+  const emailOk = safeEqual(String(email ?? '').toLowerCase(), adminEmail.toLowerCase());
+  const passOk  = safeEqual(String(password ?? ''), adminPassword);
+  if (!emailOk || !passOk) {
     await new Promise(r => setTimeout(r, 600)); // slow brute-force
     return NextResponse.json({ success: false, error: 'Invalid admin credentials' }, { status: 401 });
   }

@@ -1,9 +1,28 @@
 // app/api/student/assignments/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from "@/lib/getSessionUser";
+import { rateLimit } from '@/lib/rate-limit';
+
+async function readJson(req: NextRequest): Promise<Record<string, unknown>> {
+  try {
+    const body = await req.json();
+    return body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+const str = (v: unknown, max: number): string | null =>
+  typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;
+
+async function getOrCreateStudent(userId: string, role: string) {
+  let student = await prisma.student.findUnique({ where: { userId } });
+  if (!student && role === 'TEACHER') {
+    student = await prisma.student.create({ data: { userId } });
+  }
+  return student;
+}
 
 // GET - Fetch ALL assignments (filtering done client-side)
 export async function GET(req: NextRequest) {
@@ -13,16 +32,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    let student = await prisma.student.findUnique({
-      where: { userId: session.user.id },
-    });
-
-    if (!student && session.user.role === 'TEACHER') {
-      student = await prisma.student.create({
-        data: { userId: session.user.id },
-      });
-    }
-
+    const student = await getOrCreateStudent(session.user.id, session.user.role);
     if (!student) {
       return NextResponse.json({ error: 'Student profile not found' }, { status: 404 });
     }
@@ -92,16 +102,13 @@ export async function GET(req: NextRequest) {
     }));
 
     return NextResponse.json({ success: true, assignments: processedAssignments });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching assignments:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch assignments', details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch assignments' }, { status: 500 });
   }
 }
 
-// POST - Submit assignment
+// POST - Submit assignment (late submissions are allowed; the apps show them as past due)
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionUser(req);
@@ -109,21 +116,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    let student = await prisma.student.findUnique({
-      where: { userId: session.user.id },
-    });
-
-    if (!student && session.user.role === 'TEACHER') {
-      student = await prisma.student.create({
-        data: { userId: session.user.id },
-      });
-    }
-
+    const student = await getOrCreateStudent(session.user.id, session.user.role);
     if (!student) {
       return NextResponse.json({ error: 'Student profile not found' }, { status: 404 });
     }
 
-    const { assignmentId, fileUrl, fileName, fileSize, remarks } = await req.json();
+    const rl = await rateLimit({ identifier: `asg-submit:${session.user.id}`, limit: 10, window: 600 });
+    if (!rl.success) {
+      return NextResponse.json({ error: 'Too many submissions. Please wait a few minutes.' }, { status: 429 });
+    }
+
+    const body = await readJson(req);
+    const assignmentId = str(body.assignmentId, 100);
+    const fileUrl = str(body.fileUrl, 2000);
+    const fileName = str(body.fileName, 255);
+    const fileSize = str(body.fileSize, 30);
+    const remarks = str(body.remarks, 500);
 
     if (!assignmentId || !fileUrl || !fileName) {
       return NextResponse.json(
@@ -131,52 +139,48 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (!/^https?:\/\//i.test(fileUrl)) {
+      return NextResponse.json({ error: 'Invalid file URL' }, { status: 400 });
+    }
 
-    const assignment = await prisma.assignmentV2.findUnique({
-      where: { id: assignmentId },
+    // only assignments the student can actually see in the list
+    const assignment = await prisma.assignmentV2.findFirst({
+      where: { id: assignmentId, isPublished: true },
+      select: { id: true },
     });
-
     if (!assignment) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    const existingSubmission = await prisma.assignmentSubmission.findUnique({
-      where: {
-        assignmentId_studentId: { assignmentId, studentId: student.id },
-      },
-    });
-
-    if (existingSubmission) {
-      return NextResponse.json(
-        { error: 'You have already submitted this assignment' },
-        { status: 400 }
-      );
+    try {
+      const submission = await prisma.assignmentSubmission.create({
+        data: {
+          assignmentId,
+          studentId: student.id,
+          fileUrl,
+          fileName,
+          fileSize: fileSize || '0 MB',
+          remarks,
+          status: 'pending',
+          isCompleted: false,
+        },
+      });
+      return NextResponse.json({ success: true, submission }, { status: 201 });
+    } catch (e: any) {
+      // P2002 = unique (assignmentId, studentId): a double tap or a second device got there first.
+      // Relying on the DB constraint (instead of "check then insert") makes this race-proof.
+      if (e?.code === 'P2002') {
+        return NextResponse.json({ error: 'You have already submitted this assignment' }, { status: 409 });
+      }
+      throw e;
     }
-
-    const submission = await prisma.assignmentSubmission.create({
-      data: {
-        assignmentId,
-        studentId: student.id,
-        fileUrl,
-        fileName,
-        fileSize: fileSize || '0 MB',
-        remarks: remarks || null,
-        status: 'pending',
-        isCompleted: false,
-      },
-    });
-
-    return NextResponse.json({ success: true, submission }, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error submitting assignment:', error);
-    return NextResponse.json(
-      { error: 'Failed to submit assignment', details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to submit assignment' }, { status: 500 });
   }
 }
 
-// PATCH - Mark assignment as complete
+// PATCH - Mark a submission as done (or undo it with isCompleted: false)
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getSessionUser(req);
@@ -184,21 +188,13 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    let student = await prisma.student.findUnique({
-      where: { userId: session.user.id },
-    });
-
-    if (!student && session.user.role === 'TEACHER') {
-      student = await prisma.student.create({
-        data: { userId: session.user.id },
-      });
-    }
-
+    const student = await getOrCreateStudent(session.user.id, session.user.role);
     if (!student) {
       return NextResponse.json({ error: 'Student profile not found' }, { status: 404 });
     }
 
-    const { submissionId, isCompleted } = await req.json();
+    const body = await readJson(req);
+    const submissionId = str(body.submissionId, 100);
 
     if (!submissionId) {
       return NextResponse.json({ error: 'Submission ID required' }, { status: 400 });
@@ -215,20 +211,20 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    // Before: `isCompleted ?? true` + `status: isCompleted ? ... : ...` disagreed when the field was
+    // missing (flag set, status untouched). One variable now drives both.
+    const done = body.isCompleted !== false;
     const updatedSubmission = await prisma.assignmentSubmission.update({
       where: { id: submissionId },
       data: {
-        isCompleted: isCompleted ?? true,
-        status: isCompleted ? 'completed' : submission.status,
+        isCompleted: done,
+        status: done ? 'completed' : submission.status === 'completed' ? 'pending' : submission.status,
       },
     });
 
     return NextResponse.json({ success: true, submission: updatedSubmission });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating submission:', error);
-    return NextResponse.json(
-      { error: 'Failed to update submission', details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to update submission' }, { status: 500 });
   }
 }

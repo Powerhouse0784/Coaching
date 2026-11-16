@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { getSessionUser } from '@/lib/getSessionUser';
+import { rateLimit } from '@/lib/rate-limit';
+
+// The AI call can take 20-60 s; without this Vercel may cut it off early.
+export const maxDuration = 60;
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -15,8 +20,26 @@ interface StudyPlanRequest {
 
 export async function POST(req: NextRequest) {
   try {
+    // Costs Groq credits: signed-in users only, and capped per user.
+    const session = await getSessionUser(req);
+    if (!session) {
+      return NextResponse.json({ success: false, error: 'Please sign in to create a study plan' }, { status: 401 });
+    }
+    const limit = await rateLimit({ identifier: `studyplan:${session.user.id}`, limit: 10, window: 3600 });
+    if (!limit.success) {
+      return NextResponse.json(
+        { success: false, error: 'Too many plans generated. Please try again in a while.' },
+        { status: 429 }
+      );
+    }
+
     const body: StudyPlanRequest = await req.json();
     const { topics, days, hoursPerDay, level, goal } = body;
+
+    // Bounds keep the prompt (and the Groq bill) sane
+    if (typeof topics !== 'string' || topics.length > 500 || !(days >= 1 && days <= 60) || !(hoursPerDay > 0 && hoursPerDay <= 16)) {
+      return NextResponse.json({ success: false, error: 'Please enter 1-60 days, 1-16 hours per day and shorter topics' }, { status: 400 });
+    }
 
     // Validate input
     if (!topics || !days || !hoursPerDay || !level) {
@@ -112,7 +135,8 @@ Generate the complete study plan now:`;
       ],
       model: 'openai/gpt-oss-120b', 
       temperature: 0.7,
-      max_tokens: 8000, 
+      // Longer plans need more room (a too-small limit cuts the JSON off mid-way)
+      max_tokens: Math.min(16000, 3000 + days * 700),
       response_format: { type: 'json_object' }
     });
 

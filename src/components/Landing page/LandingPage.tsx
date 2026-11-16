@@ -306,7 +306,6 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void;
   const [error, setError]                 = useState('');
   const [success, setSuccess]             = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const TEACHER_REGISTRATION_CODE = 'P8YGJCVR2';
 
   const handleChange = (field: keyof FormData, value: string) => { setFormData({ ...formData, [field]: value }); setError(''); };
 
@@ -318,13 +317,12 @@ const RegisterPage: React.FC<{ onSwitchToLogin: () => void; onBack?: () => void;
     if (!agreedToTerms) { setError('Please agree to the Terms of Service and Privacy Policy'); return; }
     if (role === 'TEACHER') {
       if (!teacherCode.trim()) { setError('Please enter the teacher registration code'); return; }
-      if (teacherCode.trim() !== TEACHER_REGISTRATION_CODE) { setError('Invalid teacher registration code.'); return; }
     }
     setLoading(true);
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formData.name, email: formData.email, password: formData.password, role }),
+        body: JSON.stringify({ name: formData.name, email: formData.email, password: formData.password, role, teacherCode: role === 'TEACHER' ? teacherCode.trim() : undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Registration failed');

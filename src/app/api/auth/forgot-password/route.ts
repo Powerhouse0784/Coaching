@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function generateResetToken(): string {
@@ -117,6 +118,15 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = body.email.toLowerCase().trim();
+
+    // Stops someone from using this endpoint to flood an inbox with reset e-mails.
+    const [byEmail, byIp] = await Promise.all([
+      rateLimit({ identifier: `forgot:email:${normalizedEmail}`, limit: 5, window: 3600 }),
+      rateLimit({ identifier: `forgot:ip:${getClientIp(req)}`, limit: 20, window: 3600 }),
+    ]);
+    if (!byEmail.success || !byIp.success) {
+      return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
+    }
 
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
