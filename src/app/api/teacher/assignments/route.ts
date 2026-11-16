@@ -275,3 +275,102 @@ export async function DELETE(req: NextRequest) {
     );
   }
 }
+
+// PUT - Edit an assignment (partial update, owner only)
+export async function PUT(req: NextRequest) {
+  try {
+    const session = await getSessionUser(req);
+
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const teacher = await prisma.teacher.findUnique({
+      where: { userId: session.user.id },
+    });
+
+    if (!teacher) {
+      return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 });
+    }
+
+    const body = await req.json().catch(() => null);
+    const id = typeof body?.id === 'string' ? body.id : '';
+    if (!id) {
+      return NextResponse.json({ error: 'Assignment ID required' }, { status: 400 });
+    }
+
+    const existing = await prisma.assignmentV2.findFirst({
+      where: { id, teacherId: teacher.id },
+    });
+
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'Assignment not found or unauthorized' },
+        { status: 404 }
+      );
+    }
+
+    const data: Record<string, unknown> = {};
+
+    for (const key of ['title', 'description', 'subject'] as const) {
+      if (body[key] !== undefined) {
+        const v = typeof body[key] === 'string' ? body[key].trim() : '';
+        if (!v) {
+          return NextResponse.json({ error: `${key} cannot be empty` }, { status: 400 });
+        }
+        data[key] = v;
+      }
+    }
+
+    if (body.class !== undefined) {
+      const v = typeof body.class === 'string' ? body.class.trim() : '';
+      if (!v) {
+        return NextResponse.json({ error: 'class cannot be empty' }, { status: 400 });
+      }
+      data.class = v;
+    }
+
+    if (body.dueDate !== undefined) {
+      const d = new Date(body.dueDate);
+      if (isNaN(d.getTime())) {
+        return NextResponse.json({ error: 'Invalid due date' }, { status: 400 });
+      }
+      data.dueDate = d;
+    }
+
+    // Replacing the PDF: url + name travel together
+    if (body.fileUrl !== undefined) {
+      if (typeof body.fileUrl !== 'string' || !body.fileUrl || typeof body.fileName !== 'string' || !body.fileName) {
+        return NextResponse.json({ error: 'fileUrl and fileName are required together' }, { status: 400 });
+      }
+      data.fileUrl = body.fileUrl;
+      data.fileName = body.fileName;
+      if (body.fileSize !== undefined) data.fileSize = String(body.fileSize) || '0 MB';
+    }
+
+    if (body.totalMarks !== undefined) {
+      const n = parseInt(body.totalMarks);
+      if (isNaN(n) || n < 0) {
+        return NextResponse.json({ error: 'Invalid total marks' }, { status: 400 });
+      }
+      data.totalMarks = n;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+    }
+
+    const assignment = await prisma.assignmentV2.update({
+      where: { id },
+      data,
+    });
+
+    return NextResponse.json({ success: true, assignment });
+  } catch (error: any) {
+    console.error('Error updating assignment:', error);
+    return NextResponse.json(
+      { error: 'Failed to update assignment', details: error.message },
+      { status: 500 }
+    );
+  }
+}
